@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>C3S seasonal precip — skill vs forecast</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{--ink:#15201c;--paper:#f4f1ea;--panel:#fbfaf6;--line:#d8d2c4;--muted:#6b6555;
+    --accent:#0b6e4f;--accent2:#1769aa;--good:#0b6e4f;--ok:#b8860b;--bad:#b3402e;--none:#8a8478;
+    --shadow:0 1px 0 #fff inset,0 2px 14px rgba(20,30,25,.06);}
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(120% 80% at 100% 0%,#ece7da 0%,var(--paper) 55%) fixed;
+    color:var(--ink);font-family:"Archivo",system-ui,sans-serif;line-height:1.45;-webkit-font-smoothing:antialiased}
+  .mono{font-family:"JetBrains Mono",ui-monospace,monospace}
+  header{padding:26px 22px 14px;border-bottom:1px solid var(--line)}
+  h1{font-weight:900;font-size:clamp(20px,3.2vw,30px);letter-spacing:-.02em;margin:0}
+  h1 .dot{color:var(--accent)}
+  .sub{color:var(--muted);margin:6px 0 0;max-width:74ch;font-size:14px}
+  main{padding:18px 22px 70px;max-width:1320px;margin:0 auto}
+  section{margin-top:26px}
+  .lbl{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:0 0 10px;display:flex;align-items:center;gap:10px}
+  .lbl::after{content:"";flex:1;height:1px;background:var(--line)}
+  .controls{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end}
+  .field{display:flex;flex-direction:column;gap:5px}
+  .field label{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700}
+  select,input[type=number]{font-family:"JetBrains Mono",monospace;font-size:14px;padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:var(--panel);color:var(--ink);box-shadow:var(--shadow);min-width:130px}
+  select:focus,input:focus{outline:2px solid var(--accent);outline-offset:1px}
+  .yr{display:flex;align-items:center}
+  .yr button{font-family:"JetBrains Mono",monospace;border:1px solid var(--line);background:var(--panel);width:30px;height:38px;cursor:pointer;font-size:16px}
+  .yr button:first-child{border-radius:9px 0 0 9px}.yr button:last-child{border-radius:0 9px 9px 0}
+  .yr input{border-radius:0;border-left:0;border-right:0;text-align:center;min-width:84px}
+  .readout{font-size:12.5px;color:var(--muted);padding:8px 0 0}
+  .readout b{color:var(--ink)}
+  .grid{display:grid;gap:16px}
+  .cards{grid-template-columns:repeat(auto-fill,minmax(240px,1fr))}
+  .two{grid-template-columns:repeat(auto-fit,minmax(320px,1fr));max-width:920px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:var(--shadow)}
+  .card .head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 11px;border-bottom:1px solid var(--line)}
+  .card .head .nm{font-weight:700;font-size:13px}.card .head .tok{font-size:10px;color:var(--muted)}
+  .vp{position:relative;overflow:hidden;background:#fff;display:flex;align-items:center;justify-content:center}
+  .vp.sk{height:210px}
+  .vp.fc{aspect-ratio:600/457}
+  .vp img{width:100%;display:block;transform-origin:center;transition:transform .2s ease}
+  .vp .scaler{position:absolute;inset:0;transform-origin:center}
+  .vp iframe{width:100%;height:100%;border:0;display:block}
+  .vp .ph{color:var(--muted);font-size:12px;text-align:center;padding:14px}
+  .vp.cross::after{content:"";position:absolute;left:50%;top:50%;width:14px;height:14px;transform:translate(-50%,-50%);
+    border:1.5px solid #e0114e;border-radius:50%;box-shadow:0 0 0 1px #fff;pointer-events:none;z-index:5}
+  .vp.cross::before{content:"";position:absolute;left:50%;top:50%;width:1px;height:26px;transform:translate(-50%,-50%);background:#e0114e;opacity:.5;pointer-events:none;z-index:5}
+  .badge{font-family:"JetBrains Mono",monospace;font-size:10.5px;font-weight:600;padding:3px 8px;border-radius:999px;color:#fff;text-transform:uppercase;letter-spacing:.06em}
+  .b-good{background:var(--good)}.b-ok{background:var(--ok)}.b-bad{background:var(--bad)}.b-none{background:var(--none)}
+  .card .foot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 11px;border-top:1px solid var(--line)}
+  .card .foot select{min-width:0;padding:6px 8px;font-size:12px;flex:1}
+  .groups{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  @media(max-width:900px){.groups{grid-template-columns:1fr}}
+  .group{border:1px solid var(--line);border-radius:13px;background:rgba(255,255,255,.4);padding:12px}
+  .group h3{margin:0 0 10px;font-size:13px;font-weight:900;letter-spacing:.04em;display:flex;align-items:center;gap:8px}
+  .group h3 .pip{width:11px;height:11px;border-radius:3px}
+  .group.empty{opacity:.55}.group .stack{display:grid;gap:12px}
+  .note{font-size:12px;color:var(--muted);margin-top:8px}
+  details.adv{margin-top:30px;border:1px dashed var(--line);border-radius:11px;padding:0 14px;background:rgba(255,255,255,.3)}
+  details.adv summary{cursor:pointer;font-size:12px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--muted);padding:12px 0}
+  .calcol{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px;padding:0 0 16px}
+  .calbox{border:1px solid var(--line);border-radius:9px;padding:10px 12px;background:var(--panel)}
+  .calbox h4{margin:0 0 8px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink)}
+  .rng{display:flex;flex-direction:column;gap:3px;font-size:11.5px;color:var(--muted);margin-bottom:6px}
+  .chk{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink);margin:4px 0 10px}
+  footer{border-top:1px solid var(--line);padding:18px 22px;color:var(--muted);font-size:12px;max-width:1320px;margin:0 auto}
+  footer a{color:var(--accent2)}
+</style>
+</head>
+<body>
+<header>
+  <h1>C3S seasonal precipitation <span class="dot">·</span> skill &amp; forecast</h1>
+  <p class="sub">Pick an issued month + valid trimester, then a country. Shows the C3S multi-system 3-month precipitation
+    correlation (1993–2016 hindcast skill) and current forecast, then each provider's skill map (classify good/ok/bad)
+    and the forecasts grouped by your classification. Pulls directly from ECMWF / Copernicus — no build, no backend.</p>
+</header>
+
+<main>
+  <section>
+    <div class="controls">
+      <div class="field"><label for="m">Issued month</label><select id="m"></select></div>
+      <div class="field"><label for="t">Valid trimester</label><select id="t"></select></div>
+      <div class="field"><label for="y">Cycle year</label>
+        <div class="yr"><button id="ydn">–</button><input id="y" class="mono" type="number"><button id="yup">+</button></div></div>
+    </div>
+    <div class="readout mono" id="readout"></div>
+  </section>
+
+  <section><p class="lbl">C3S multi-system</p><div class="grid two" id="multi"></div></section>
+
+  <section><div class="controls"><div class="field"><label for="c">Country</label><select id="c"></select></div></div></section>
+
+  <section>
+    <p class="lbl">Provider skill — correlation, zoomed to <span id="cl1" style="text-transform:none;letter-spacing:0">country</span></p>
+    <div class="grid cards" id="skill"></div>
+    <p class="note">Higher correlation = more skill. Set each provider good/ok/bad — the grouping below updates live.
+      If the country isn't centred, adjust the skill-map calibration in Advanced (toggle the crosshair to help).</p>
+  </section>
+
+  <section>
+    <p class="lbl">Forecasts grouped by skill — <span id="cl2" style="text-transform:none;letter-spacing:0">country</span></p>
+    <div class="groups" id="groups"></div>
+    <p class="note">Live interactive C3S charts (drag/zoom/fullscreen inside any tile). Zoom is a CSS magnify toward the country; fine-tune in Advanced.</p>
+  </section>
+
+  <details class="adv">
+    <summary>Advanced — calibration &amp; sources</summary>
+    <div class="chk"><input type="checkbox" id="cross"><label for="cross">show centre crosshair (calibrate until the country sits under it at zoom ~1)</label></div>
+    <div class="calcol">
+      <div class="calbox"><h4>Skill maps (PNG)</h4>
+        <div class="rng"><label>zoom <span id="szlbl"></span></label><input id="sz" type="range" min="1" max="9" step="0.5" value="4"></div>
+        <div class="rng"><label>map left</label><input id="sx0" type="range" min="0" max="0.25" step="0.005" value="0.045"></div>
+        <div class="rng"><label>map top</label><input id="sy0" type="range" min="0" max="0.3" step="0.005" value="0.13"></div>
+        <div class="rng"><label>map right</label><input id="sx1" type="range" min="0.75" max="1" step="0.005" value="0.965"></div>
+        <div class="rng"><label>map bottom</label><input id="sy1" type="range" min="0.6" max="1" step="0.005" value="0.78"></div>
+      </div>
+      <div class="calbox"><h4>Forecast charts (embed)</h4>
+        <div class="rng"><label>zoom <span id="fzlbl"></span></label><input id="fz" type="range" min="1" max="9" step="0.5" value="3"></div>
+        <div class="rng"><label>map left</label><input id="fx0" type="range" min="0" max="0.25" step="0.005" value="0.02"></div>
+        <div class="rng"><label>map top</label><input id="fy0" type="range" min="0" max="0.3" step="0.005" value="0.10"></div>
+        <div class="rng"><label>map right</label><input id="fx1" type="range" min="0.75" max="1" step="0.005" value="0.98"></div>
+        <div class="rng"><label>map bottom</label><input id="fy1" type="range" min="0.6" max="1" step="0.005" value="0.80"></div>
+      </div>
+      <div class="calbox"><h4>Forecast product</h4>
+        <select id="ftype" style="width:100%">
+          <option value="tsum">Tercile summary</option>
+          <option value="ensm">Ensemble-mean anomaly</option>
+          <option value="terc_hi">Prob. upper tercile</option>
+          <option value="terc_lo">Prob. lower tercile</option>
+          <option value="prob">Prob. exceeding median</option>
+        </select>
+        <p class="note" style="margin-top:10px">Skill maps are global PNGs from the C3S verification gallery; forecasts are the
+          global embed (area08) magnified to the country. Both use lon/lat→pixel mapping over a [-180,180]×[90,-90] map; the
+          sliders set where the map sits inside each frame.</p>
+      </div>
+    </div>
+  </details>
+</main>
+
+<footer>
+  Generated using Copernicus Climate Change Service (C3S) information. Forecasts: ECMWF OpenCharts embed
+  (<span class="mono">c3s_seasonal_spatial_*_rain_3m</span>). Skill: C3S seasonal verification, 1993–2016 hindcast.
+  Neither the European Commission nor ECMWF is responsible for any use of this information.
+</footer>
+
+<script>
+/* ===================== CONFIG ===================== */
+const TYPE_DEFAULT="tsum";
+const VERIF_TPL=(stm,tok,fc)=>`https://sites.ecmwf.int/cxep/c3s-seasonal-verification/plots/stmonth${pad(stm)}/${tok}_stmonth${pad(stm)}_hindcast1993-2016_monthly.3m.fcmonth${fc}.tp.corr.png`;
+const EMBED_TPL=(oc,ts,type)=>`https://climate.copernicus.eu/charts/embed/c3s_seasonal/c3s_seasonal_spatial_${oc}_rain_3m?area=area08&base_time=${ts.base_time}&player_dimension=valid_time&type=${type}&valid_time=${ts.valid_time}`;
+
+const PROVIDERS=[
+  {key:"ecmwf",name:"ECMWF",oc:"ecmf",verif:"ecmwf_s51"},
+  {key:"ukmo",name:"UK Met Office",oc:"egrr",verif:"ukmo_s603"},
+  {key:"meteofr",name:"Météo-France",oc:"lfpw",verif:"meteo_france_s9"},
+  {key:"dwd",name:"DWD",oc:"edzw",verif:"dwd_s21"},
+  {key:"cmcc",name:"CMCC",oc:"cmcc",verif:"cmcc_s35"},
+  {key:"ncep",name:"NCEP",oc:"kwbc",verif:"ncep_s2"},
+  {key:"jma",name:"JMA",oc:"rjtd",verif:"jma_s3"},
+  {key:"eccc",name:"ECCC",oc:"cwao",verif:"eccc_s3"},
+  {key:"bom",name:"BOM",oc:"ammc",verif:"bom_s2"},
+];
+const MULTI={key:"multi",name:"C3S multi-system",oc:"mm"};
+const MULTI_CANDS=["C3Smm_s2026","C3Smm_s2025","C3Smm_s2024","C3Smm_s2023"];  // year-versioned
+
+const COUNTRY={
+  "Niger (south)":{bbox:[0.1,11.6,16.0,17.0]},"Niger (all)":{bbox:[0.1,11.6,16.0,23.6]},
+  "Burkina Faso":{bbox:[-5.6,9.3,2.5,15.2]},"Nigeria":{bbox:[2.6,4.2,14.7,13.9]},
+  "Nigeria — Adamawa":{bbox:[11.5,7.5,13.8,11.0]},"Central African Rep.":{bbox:[14.3,2.2,27.5,11.1]},
+  "Mozambique":{bbox:[30.0,-27.0,41.5,-10.3]},"Haiti":{bbox:[-74.6,17.9,-71.2,20.2]},"Vanuatu":{bbox:[166.0,-20.5,170.5,-13.0]},
+};
+const TRIM={JFM:1,FMA:2,MAM:3,AMJ:4,MJJ:5,JJA:6,JAS:7,ASO:8,SON:9,OND:10,NDJ:11,DJF:12};
+const MONTHS=["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+/* ===================== state ===================== */
+const pad=n=>String(n).padStart(2,"0");
+const $=id=>document.getElementById(id);
+const state={ts:null,country:null,cls:{},type:TYPE_DEFAULT,multiTok:null,cross:false,
+  sk:{z:4,x0:.045,y0:.13,x1:.965,y1:.78}, fc:{z:3,x0:.02,y0:.10,x1:.98,y1:.80}};
+
+function timeSpec(y,m,trim){const ts=TRIM[trim];let ty=y;if(ts<m)ty++;
+  const lead=(ty*12+(ts-1))-(y*12+(m-1))+1;
+  return {y,m,trim,tStart:ts,tYear:ty,leadtime:lead,base_time:`${y}${pad(m)}010000`,valid_time:`${ty}${pad(ts)}010000`};}
+// lon/lat -> fraction of frame, given a calibration {x0,y0,x1,y1} (global [-180,180]x[90,-90])
+function frac(lon,lat,cal){return {x:cal.x0+((lon+180)/360)*(cal.x1-cal.x0), y:cal.y0+((90-lat)/180)*(cal.y1-cal.y0)};}
+function ctrFrac(cal){const b=COUNTRY[state.country].bbox;return frac((b[0]+b[2])/2,(b[1]+b[3])/2,cal);}
+function tfm(cal){const c=ctrFrac(cal);return `transform:scale(${cal.z});transform-origin:${(c.x*100).toFixed(1)}% ${(c.y*100).toFixed(1)}%`;}
+
+function badge(cls){return `<span class="badge b-${cls}">${cls==='none'?'unset':cls}</span>`;}
+const GROUPS=[["good","var(--good)"],["ok","var(--ok)"],["bad","var(--bad)"]];
+const crossCls=()=>state.cross?" cross":"";
+
+/* ===================== render ===================== */
+function renderReadout(){const ts=state.ts;
+  $("readout").innerHTML=`base_time <b>${ts.base_time}</b> · valid_time <b>${ts.valid_time}</b> · trimester <b>${ts.trim}</b> · leadtime/fcmonth <b>${ts.leadtime}</b>`;}
+
+function skillImg(tok,zoom){
+  if(!tok) return `<div class="vp sk${crossCls()}"><div class="ph">no skill map for this system / selection</div></div>`;
+  const url=VERIF_TPL(state.ts.m,tok,state.ts.leadtime);
+  const st=zoom?tfm(state.sk):"";
+  return `<div class="vp sk${crossCls()}"><img src="${url}" style="${st}" referrerpolicy="no-referrer"
+    onerror="this.parentNode.innerHTML='<div class=ph>no map for this month/lead</div>'"></div>`;}
+
+function forecastFrame(oc,zoom){
+  const src=EMBED_TPL(oc,state.ts,state.type);
+  const st=zoom?tfm(state.fc):"";
+  return `<div class="vp fc${crossCls()}"><div class="scaler" style="${st}"><iframe loading="lazy" src="${src}" referrerpolicy="no-referrer" allowfullscreen></iframe></div></div>`;}
+
+function renderMulti(){
+  $("multi").innerHTML =
+    `<div class="card"><div class="head"><span class="nm">Correlation (skill)</span><span class="tok mono">${state.multiTok||'resolving…'}</span></div>${skillImg(state.multiTok,!!state.country)}</div>` +
+    `<div class="card"><div class="head"><span class="nm">Current forecast</span><span class="tok mono">mm</span></div>${forecastFrame(MULTI.oc,!!state.country)}</div>`;}
+
+function renderSkill(){
+  $("cl1").textContent=state.country; $("cl2").textContent=state.country;
+  $("skill").innerHTML=PROVIDERS.map(p=>{
+    const cls=state.cls[p.key]||"none";
+    const sel=`<select data-k="${p.key}" onchange="setCls(this)">
+      <option value="none"${cls==='none'?' selected':''}>unset…</option>
+      <option value="good"${cls==='good'?' selected':''}>good</option>
+      <option value="ok"${cls==='ok'?' selected':''}>ok</option>
+      <option value="bad"${cls==='bad'?' selected':''}>bad</option></select>`;
+    return `<div class="card"><div class="head"><span class="nm">${p.name}</span><span class="tok mono">${p.verif}</span></div>
+      ${skillImg(p.verif,true)}<div class="foot">${sel}${badge(cls)}</div></div>`;}).join("");}
+
+function renderGroups(){
+  $("groups").innerHTML=GROUPS.map(([g,col])=>{
+    const keys=PROVIDERS.filter(p=>(state.cls[p.key]||"none")===g).map(p=>p.key);
+    const inner=keys.length?keys.map(k=>{const p=PROVIDERS.find(x=>x.key===k);
+      return `<div class="card"><div class="head"><span class="nm">${p.name}</span></div>${forecastFrame(p.oc,true)}</div>`;}).join("")
+      :`<div class="note">— none —</div>`;
+    return `<div class="group ${keys.length?'':'empty'}"><h3><span class="pip" style="background:${col}"></span>${g.toUpperCase()} (${keys.length})</h3><div class="stack">${inner}</div></div>`;}).join("");}
+
+/* ===================== orchestration ===================== */
+function imgLoads(url){return new Promise(r=>{const i=new Image();i.onload=()=>r(true);i.onerror=()=>r(false);i.src=url;});}
+async function resolveMulti(){
+  for(const t of MULTI_CANDS){ if(await imgLoads(VERIF_TPL(state.ts.m,t,state.ts.leadtime))){ state.multiTok=t; renderMulti(); return; } }
+  state.multiTok=null; renderMulti();
+}
+function rebuild(){state.ts=timeSpec(+$("y").value,+$("m").value,$("t").value);renderReadout();
+  state.multiTok=null;renderMulti();resolveMulti();
+  if(state.country){renderSkill();renderGroups();}}
+function refreshCountry(){state.country=$("c").value;renderMulti();renderSkill();renderGroups();}
+function setCls(sel){state.cls[sel.dataset.k]=sel.value;renderSkill();renderGroups();}
+function reZoom(){renderMulti();renderSkill();renderGroups();}
+
+function init(){
+  $("m").innerHTML=MONTHS.map((mn,i)=>`<option value="${i+1}">${mn}</option>`).join("");
+  $("t").innerHTML=Object.keys(TRIM).map(k=>`<option value="${k}">${k}</option>`).join("");
+  $("c").innerHTML=`<option value="">— select —</option>`+Object.keys(COUNTRY).map(k=>`<option>${k}</option>`).join("");
+  const now=new Date(),cy=now.getFullYear(),cm=now.getMonth()+1;
+  $("m").value="5";$("t").value="JAS";$("y").value=(5<=cm?cy:cy-1);
+  $("c").value="Niger (south)";state.country="Niger (south)";
+  ["m","t"].forEach(id=>$(id).addEventListener("change",rebuild));
+  $("y").addEventListener("change",rebuild);
+  $("yup").onclick=()=>{$("y").value=+$("y").value+1;rebuild();};
+  $("ydn").onclick=()=>{$("y").value=+$("y").value-1;rebuild();};
+  $("c").addEventListener("change",refreshCountry);
+  $("ftype").addEventListener("change",()=>{state.type=$("ftype").value;renderMulti();renderGroups();});
+  $("cross").addEventListener("change",e=>{state.cross=e.target.checked;reZoom();});
+  // calibration sliders
+  const bind=(id,grp,key,lbl)=>{const el=$(id);el.addEventListener("input",()=>{state[grp][key]=+el.value;if(lbl)$(lbl).textContent=el.value+"×";reZoom();});};
+  bind("sz","sk","z","szlbl");bind("sx0","sk","x0");bind("sy0","sk","y0");bind("sx1","sk","x1");bind("sy1","sk","y1");
+  bind("fz","fc","z","fzlbl");bind("fx0","fc","x0");bind("fy0","fc","y0");bind("fx1","fc","x1");bind("fy1","fc","y1");
+  $("szlbl").textContent="4×";$("fzlbl").textContent="3×";
+  rebuild();
+}
+init();
+</script>
+</body>
+</html>
