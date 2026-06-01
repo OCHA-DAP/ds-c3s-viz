@@ -102,12 +102,8 @@
   <section><p class="lbl">C3S multi-system <span style="text-transform:none;letter-spacing:0;color:var(--accent)">· drag to pan · scroll to zoom</span></p>
     <div class="grid two" id="multi"></div>
     <div class="calbar">
-      <div class="calbox"><h4>Skill maps · global verification <button id="resetSk" type="button" class="mini">reset</button></h4>
-        <div class="rng"><label>zoom <span id="szlbl"></span></label><input id="sz" type="range" min="1" max="30" step="0.1"></div>
-      </div>
-      <div class="calbox"><h4>Forecasts · <span id="calArea" class="mono" style="color:var(--muted)"></span> <button id="resetFc" type="button" class="mini">reset</button></h4>
-        <div class="rng"><label>zoom <span id="fzlbl"></span></label><input id="fz" type="range" min="1" max="15" step="0.1"></div>
-      </div>
+      <button id="resetSk" type="button">reset skill view</button>
+      <button id="resetFc" type="button">reset forecast view</button>
     </div>
     <p class="note"><b>Drag</b> a map to pan and <b>scroll</b> over it to zoom (or use the sliders). The view syncs across <b>all</b> skill maps and, separately, across <b>all</b> forecast maps — skill and forecast move independently. Pick the forecast region above.</p>
   </section>
@@ -237,7 +233,8 @@ function renderGroups(){
     const inner=keys.length?keys.map(k=>{const p=PROVIDERS.find(x=>x.key===k);
       return `<div class="card"><div class="head"><span class="nm">${p.name}</span></div>${forecastFrame(p.oc)}</div>`;}).join("")
       :`<div class="note">— none —</div>`;
-    return `<div class="group ${keys.length?'':'empty'}"><h3><span class="pip" style="background:${col}"></span>${GROUP_LBL[g]} (${keys.length})</h3><div class="stack">${inner}</div></div>`;}).join("");}
+    return `<div class="group ${keys.length?'':'empty'}"><h3><span class="pip" style="background:${col}"></span>${GROUP_LBL[g]} (${keys.length})</h3><div class="stack">${inner}</div></div>`;}).join("");
+  postRender();}
 
 /* ===================== orchestration ===================== */
 function imgLoads(url){return new Promise(r=>{const i=new Image();i.onload=()=>r(true);i.onerror=()=>r(false);i.src=url;});}
@@ -249,11 +246,11 @@ function rebuild(){state.ts=timeSpec(+$("y").value,+$("m").value,$("t").value);r
   state.multiTok=null;renderMulti();resolveMulti();
   renderSkill();renderGroups();}
 function setCls(sel){state.cls[sel.dataset.k]=sel.value;renderSkill();renderGroups();}
-function setRegion(){state.region=$("region").value;$("calArea").textContent=areaFor(state.region);
+function setRegion(){state.region=$("region").value;
   renderMulti();renderGroups();}
 
 const FXD=600;  // fixed render size of each forecast embed, before fit-scaling
-const ZMAX={sk:30,fc:15};
+const ZMAX={sk:80,fc:15};
 // live-apply the shared transform to every map of a type, without re-rendering
 function applyTransforms(which){
   if(which!=="fc") document.querySelectorAll(".vp.sk img").forEach(el=>el.style.transform=tfmStr(state.sk));
@@ -261,12 +258,9 @@ function applyTransforms(which){
 // scale each fixed forecast wrapper to fill its (square) tile
 function applyFit(){document.querySelectorAll(".vp.fc .fxd").forEach(el=>{
   const w=el.closest(".vp").clientWidth; if(w) el.style.transform=`scale(${w/FXD})`;});}
-function syncZoom(){$("sz").value=state.sk.z;$("fz").value=state.fc.z;
-  $("szlbl").textContent=state.sk.z.toFixed(1)+"×";$("fzlbl").textContent=state.fc.z.toFixed(1)+"×";}
-
-// zoom keeping the frame fraction (cu,cv) fixed (cursor for wheel, centre for slider)
+// zoom keeping the frame fraction (cu,cv) fixed (the cursor position for wheel zoom)
 function zoomAt(cal,z2,cu,cv){const s=state[cal]; z2=Math.max(1,Math.min(ZMAX[cal],z2)); const ratio=z2/s.z;
-  s.tx=cu-ratio*(cu-s.tx); s.ty=cv-ratio*(cv-s.ty); s.z=z2; syncZoom(); applyTransforms(cal);}
+  s.tx=cu-ratio*(cu-s.tx); s.ty=cv-ratio*(cv-s.ty); s.z=z2; applyTransforms(cal);}
 
 // drag to pan + wheel to zoom-toward-cursor; both shared across all maps of `cal` ("sk"/"fc")
 function attachDrag(el,cal){
@@ -291,19 +285,16 @@ function init(){
   $("region").innerHTML=Object.keys(AREAS).map(k=>`<option>${k}</option>`).join("");
   const now=new Date(),cy=now.getFullYear(),cm=now.getMonth()+1;
   $("m").value="5";$("t").value="JAS";$("y").value=(5<=cm?cy:cy-1);
-  $("region").value=state.region;$("calArea").textContent=areaFor(state.region);
+  $("region").value=state.region;
   ["m","t"].forEach(id=>$(id).addEventListener("change",rebuild));
   $("y").addEventListener("change",rebuild);
   $("yup").onclick=()=>{$("y").value=+$("y").value+1;rebuild();};
   $("ydn").onclick=()=>{$("y").value=+$("y").value-1;rebuild();};
   $("region").addEventListener("change",setRegion);
   $("ftype").addEventListener("change",()=>{state.type=$("ftype").value;renderMulti();renderGroups();});
-  $("sz").addEventListener("input",()=>zoomAt("sk",+$("sz").value,.5,.5));
-  $("fz").addEventListener("input",()=>zoomAt("fc",+$("fz").value,.5,.5));
-  $("resetSk").addEventListener("click",()=>{state.sk={...DEFAULTS.sk};syncZoom();applyTransforms("sk");});
-  $("resetFc").addEventListener("click",()=>{state.fc={...DEFAULTS.fc};syncZoom();applyTransforms("fc");});
+  $("resetSk").addEventListener("click",()=>{state.sk={...DEFAULTS.sk};applyTransforms("sk");});
+  $("resetFc").addEventListener("click",()=>{state.fc={...DEFAULTS.fc};applyTransforms("fc");});
   window.addEventListener("resize",applyFit);
-  syncZoom();
   rebuild();
 }
 init();
