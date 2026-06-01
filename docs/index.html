@@ -74,6 +74,10 @@
   .chk{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink);margin:4px 0 10px}
   footer{border-top:1px solid var(--line);padding:18px 22px;color:var(--muted);font-size:12px;max-width:1320px;margin:0 auto}
   footer a{color:var(--accent2)}
+  .docs{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:18px 28px}
+  .docs h4{margin:0 0 6px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink)}
+  .docs p{margin:0;line-height:1.5}
+  .docs ul{margin:0;padding-left:16px}.docs li{margin:3px 0}
 </style>
 </head>
 <body>
@@ -138,9 +142,41 @@
 </main>
 
 <footer>
-  Generated using Copernicus Climate Change Service (C3S) information. Forecasts: ECMWF OpenCharts embed
-  (<span class="mono">c3s_seasonal_spatial_*_rain_3m</span>). Skill: C3S seasonal verification, 1993–2016 hindcast.
-  Neither the European Commission nor ECMWF is responsible for any use of this information.
+  <p class="lbl" style="margin-bottom:12px">About &amp; sources</p>
+  <div class="docs">
+    <div>
+      <h4>What you're looking at</h4>
+      <p><b>Skill</b> = how well each system reproduced past observations: the correlation between its
+      1993–2016 hindcast and observed precipitation (higher = more trustworthy). <b>Forecast</b> = the
+      current operational outlook for the same 3-month season. Classify each system good/ok/bad from its
+      skill map; the forecasts regroup live so you can weight them accordingly.</p>
+    </div>
+    <div>
+      <h4>Conventions</h4>
+      <p>3-month seasons are picked by issued month + valid trimester; only seasons starting 1–3 months
+      after issue are selectable. The verification <span class="mono">fcmonth</span> is the lead to the
+      <i>last</i> month of the window (leadtime + 2). Skill maps are global; the forecast region selector
+      switches the continent embed. Drag to pan, scroll to zoom — synced across all maps of each type.</p>
+    </div>
+    <div>
+      <h4>Systems (latest C3S)</h4>
+      <p class="mono" style="font-size:11px">ECMWF SEAS5.1 · UKMO GloSea6 · Météo-France S9 · DWD GCFS2.2 ·
+      CMCC SPS4 · NCEP CFSv2 · JMA CPS4 · ECCC GEM5.2-NEMO · BoM ACCESS-S2 · multi-system C3Smm</p>
+    </div>
+    <div>
+      <h4>Links</h4>
+      <ul>
+        <li><a href="https://climate.copernicus.eu/charts/c3s_seasonal/" target="_blank" rel="noopener">C3S seasonal charts (OpenCharts)</a></li>
+        <li><a href="https://sites.ecmwf.int/cxep/c3s-seasonal-verification/" target="_blank" rel="noopener">C3S seasonal verification gallery</a></li>
+        <li><a href="https://confluence.ecmwf.int/display/CKB/Summary+of+available+data" target="_blank" rel="noopener">C3S: summary of available data / systems</a></li>
+        <li><a href="https://cds.climate.copernicus.eu/datasets?q=seasonal" target="_blank" rel="noopener">Copernicus CDS — seasonal datasets</a></li>
+        <li><a href="https://github.com/OCHA-DAP/ds-c3s-viz" target="_blank" rel="noopener">Source (OCHA-DAP/ds-c3s-viz)</a></li>
+      </ul>
+    </div>
+  </div>
+  <p style="margin-top:18px">Generated using Copernicus Climate Change Service (C3S) information.
+  Skill: C3S seasonal verification, 1993–2016 hindcast. Neither the European Commission nor ECMWF is
+  responsible for any use of this information.</p>
 </footer>
 
 <script>
@@ -197,14 +233,14 @@ function renderReadout(){const ts=state.ts;
 function skillImg(tok){
   if(!tok) return `<div class="vp sk"><div class="ph">no skill map for this system / selection</div></div>`;
   const url=VERIF_TPL(state.ts.m,tok,state.ts.fcmonth);
-  return `<div class="vp sk"><img src="${url}" draggable="false" style="transform:${tfmStr(state.sk)}" referrerpolicy="no-referrer"
+  return `<div class="vp sk"><img src="${url}" draggable="false" fetchpriority="high" style="transform:${tfmStr(state.sk)}" referrerpolicy="no-referrer"
     onerror="this.parentNode.innerHTML='<div class=ph>no map for this month/lead</div>'"></div>`;}
 
 // fixed-size .fxd wrapper (scaled to fit) keeps the embed layout identical across tiles;
 // the transparent overlay lets every forecast tile be dragged/zoomed (iframes eat events)
 function forecastFrame(oc){
   const src=EMBED_TPL(oc,state.ts,state.type,areaFor(state.region));
-  return `<div class="vp fc"><div class="scaler" style="transform:${tfmStr(state.fc)}"><div class="fxd"><iframe loading="lazy" src="${src}" referrerpolicy="no-referrer" allowfullscreen></iframe></div></div><div class="dragcap"></div></div>`;}
+  return `<div class="vp fc"><div class="scaler" style="transform:${tfmStr(state.fc)}"><div class="fxd"><iframe loading="lazy" fetchpriority="low" src="${src}" referrerpolicy="no-referrer" allowfullscreen></iframe></div></div><div class="dragcap"></div></div>`;}
 
 function renderMulti(){
   $("multi").innerHTML =
@@ -234,14 +270,17 @@ function renderGroups(){
   postRender();}
 
 /* ===================== orchestration ===================== */
-function imgLoads(url){return new Promise(r=>{const i=new Image();i.onload=()=>r(true);i.onerror=()=>r(false);i.src=url;});}
+function imgLoads(url){return new Promise(r=>{const i=new Image();i.fetchPriority="high";i.onload=()=>r(true);i.onerror=()=>r(false);i.src=url;});}
 async function resolveMulti(){
   for(const t of MULTI_CANDS){ if(await imgLoads(VERIF_TPL(state.ts.m,t,state.ts.fcmonth))){ state.multiTok=t; renderMulti(); return; } }
   state.multiTok=null; renderMulti();
 }
 function rebuild(){state.ts=timeSpec(+$("y").value,+$("m").value,$("t").value);renderReadout();
-  state.multiTok=null;renderMulti();resolveMulti();
-  renderSkill();renderGroups();}
+  state.multiTok=null;
+  resolveMulti();            // kick the C3S multi skill PNG fetch first (high priority)
+  renderMulti();             // skill placeholder + forecast (forecast iframes are low priority)
+  renderSkill();             // provider skill PNGs (high priority)
+  renderGroups();}           // grouped forecast iframes (low priority, lazy)
 function setCls(sel){state.cls[sel.dataset.k]=sel.value;renderSkill();renderGroups();}
 function setRegion(){state.region=$("region").value;
   renderMulti();renderGroups();}
