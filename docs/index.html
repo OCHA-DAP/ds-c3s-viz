@@ -64,12 +64,9 @@
   .note{font-size:12px;color:var(--muted);margin-top:8px}
   details.adv{margin-top:30px;border:1px dashed var(--line);border-radius:11px;padding:0 14px;background:rgba(255,255,255,.3)}
   details.adv summary{cursor:pointer;font-size:12px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--muted);padding:12px 0}
-  .calbar{display:flex;flex-wrap:wrap;gap:14px;max-width:920px;margin-top:14px}
-  .calbar .chk{flex-basis:100%;margin:0}
-  .calbar .calbox{flex:1;min-width:220px}
-  .calbar button{font-family:"JetBrains Mono",monospace;font-size:12px;padding:7px 12px;border:1px solid var(--accent);background:var(--accent);color:#fff;border-radius:8px;cursor:pointer}
+  .calbar{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;max-width:920px;margin-top:14px}
+  .calbar button{justify-self:start;font-family:"JetBrains Mono",monospace;font-size:12px;padding:7px 12px;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:8px;cursor:pointer}
   .calbar button:active{transform:translateY(1px)}
-  .calbar .mini{float:right;padding:2px 9px;font-size:10px;border-color:var(--line);background:var(--panel);color:var(--muted)}
   .calcol{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px;padding:0 0 16px}
   .calbox{border:1px solid var(--line);border-radius:9px;padding:10px 12px;background:var(--panel)}
   .calbox h4{margin:0 0 8px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink)}
@@ -183,36 +180,36 @@ const state={ts:null,region:"Africa",cls:{},type:TYPE_DEFAULT,multiTok:null,
   sk:{...DEFAULTS.sk}, fc:{...DEFAULTS.fc}};
 
 function timeSpec(y,m,trim){const ts=TRIM[trim];let ty=y;if(ts<m)ty++;
-  const lead=(ty*12+(ts-1))-(y*12+(m-1))+1;
-  return {y,m,trim,tStart:ts,tYear:ty,leadtime:lead,base_time:`${y}${pad(m)}010000`,valid_time:`${ty}${pad(ts)}010000`};}
+  const lead=(ty*12+(ts-1))-(y*12+(m-1))+1;          // lead to the FIRST month of the trimester
+  // C3S verification fcmonth is the lead to the LAST month of the 3-month window (first+2)
+  return {y,m,trim,tStart:ts,tYear:ty,leadtime:lead,fcmonth:lead+2,base_time:`${y}${pad(m)}010000`,valid_time:`${ty}${pad(ts)}010000`};}
 // shared pan (tx,ty as a fraction of the frame) + zoom -> a CSS transform (origin centre, set in CSS)
 const tfmStr=cal=>`translate(${(cal.tx*100).toFixed(2)}%,${(cal.ty*100).toFixed(2)}%) scale(${cal.z.toFixed(3)})`;
 
 function badge(cls){return `<span class="badge b-${cls}">${cls==='none'?'unset':cls}</span>`;}
 const GROUPS=[["good","var(--good)"],["ok","var(--ok)"],["bad","var(--bad)"],["none","var(--none)"]];
-const GROUP_LBL={good:"GOOD",ok:"OK",bad:"BAD",none:"UNGROUPED"};
+const GROUP_LBL={good:"GOOD",ok:"OK",bad:"BAD",none:"UNCLASSIFIED"};
 
 /* ===================== render ===================== */
 function renderReadout(){const ts=state.ts;
-  $("readout").innerHTML=`base_time <b>${ts.base_time}</b> · valid_time <b>${ts.valid_time}</b> · trimester <b>${ts.trim}</b> · leadtime/fcmonth <b>${ts.leadtime}</b>`;}
+  $("readout").innerHTML=`base_time <b>${ts.base_time}</b> · valid_time <b>${ts.valid_time}</b> · trimester <b>${ts.trim}</b> · leadtime <b>${ts.leadtime}</b> · skill fcmonth <b>${ts.fcmonth}</b>`;}
 
 function skillImg(tok){
   if(!tok) return `<div class="vp sk"><div class="ph">no skill map for this system / selection</div></div>`;
-  const url=VERIF_TPL(state.ts.m,tok,state.ts.leadtime);
+  const url=VERIF_TPL(state.ts.m,tok,state.ts.fcmonth);
   return `<div class="vp sk"><img src="${url}" draggable="false" style="transform:${tfmStr(state.sk)}" referrerpolicy="no-referrer"
     onerror="this.parentNode.innerHTML='<div class=ph>no map for this month/lead</div>'"></div>`;}
 
 // fixed-size .fxd wrapper (scaled to fit) keeps the embed layout identical across tiles;
-// ctl=true adds a transparent overlay so the event-capturing iframe can still be dragged
-function forecastFrame(oc,ctl){
+// the transparent overlay lets every forecast tile be dragged/zoomed (iframes eat events)
+function forecastFrame(oc){
   const src=EMBED_TPL(oc,state.ts,state.type,areaFor(state.region));
-  const cap=ctl?'<div class="dragcap"></div>':'';
-  return `<div class="vp fc"><div class="scaler" style="transform:${tfmStr(state.fc)}"><div class="fxd"><iframe loading="lazy" src="${src}" referrerpolicy="no-referrer" allowfullscreen></iframe></div></div>${cap}</div>`;}
+  return `<div class="vp fc"><div class="scaler" style="transform:${tfmStr(state.fc)}"><div class="fxd"><iframe loading="lazy" src="${src}" referrerpolicy="no-referrer" allowfullscreen></iframe></div></div><div class="dragcap"></div></div>`;}
 
 function renderMulti(){
   $("multi").innerHTML =
     `<div class="card"><div class="head"><span class="nm">Correlation (skill)</span><span class="tok mono">${state.multiTok||'resolving…'}</span></div>${skillImg(state.multiTok)}</div>` +
-    `<div class="card"><div class="head"><span class="nm">Current forecast</span><span class="tok mono">mm</span></div>${forecastFrame(MULTI.oc,true)}</div>`;
+    `<div class="card"><div class="head"><span class="nm">Current forecast</span><span class="tok mono">mm</span></div>${forecastFrame(MULTI.oc)}</div>`;
   postRender();}
 
 function renderSkill(){
@@ -239,7 +236,7 @@ function renderGroups(){
 /* ===================== orchestration ===================== */
 function imgLoads(url){return new Promise(r=>{const i=new Image();i.onload=()=>r(true);i.onerror=()=>r(false);i.src=url;});}
 async function resolveMulti(){
-  for(const t of MULTI_CANDS){ if(await imgLoads(VERIF_TPL(state.ts.m,t,state.ts.leadtime))){ state.multiTok=t; renderMulti(); return; } }
+  for(const t of MULTI_CANDS){ if(await imgLoads(VERIF_TPL(state.ts.m,t,state.ts.fcmonth))){ state.multiTok=t; renderMulti(); return; } }
   state.multiTok=null; renderMulti();
 }
 function rebuild(){state.ts=timeSpec(+$("y").value,+$("m").value,$("t").value);renderReadout();
