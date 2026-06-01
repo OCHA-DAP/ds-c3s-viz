@@ -41,7 +41,7 @@
   .card .head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 11px;border-bottom:1px solid var(--line)}
   .card .head .nm{font-weight:700;font-size:13px}.card .head .tok{font-size:10px;color:var(--muted)}
   .vp{position:relative;overflow:hidden;background:#fff;display:flex;align-items:center;justify-content:center}
-  .vp.sk{min-height:120px}
+  .vp.sk{aspect-ratio:9/5}
   .vp.fc{aspect-ratio:600/457}
   .vp img{width:100%;display:block;transform-origin:center;transition:transform .2s ease}
   .vp .scaler{position:absolute;inset:0;transform-origin:center}
@@ -63,6 +63,9 @@
   .note{font-size:12px;color:var(--muted);margin-top:8px}
   details.adv{margin-top:30px;border:1px dashed var(--line);border-radius:11px;padding:0 14px;background:rgba(255,255,255,.3)}
   details.adv summary{cursor:pointer;font-size:12px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--muted);padding:12px 0}
+  .calbar{display:flex;flex-wrap:wrap;gap:14px;max-width:920px;margin-top:14px}
+  .calbar .chk{flex-basis:100%;margin:0}
+  .calbar .calbox{flex:1;min-width:220px}
   .calcol{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px;padding:0 0 16px}
   .calbox{border:1px solid var(--line);border-radius:9px;padding:10px 12px;background:var(--panel)}
   .calbox h4{margin:0 0 8px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink)}
@@ -91,7 +94,23 @@
     <div class="readout mono" id="readout"></div>
   </section>
 
-  <section><p class="lbl">C3S multi-system</p><div class="grid two" id="multi"></div></section>
+  <section><p class="lbl">C3S multi-system <span style="text-transform:none;letter-spacing:0;color:var(--accent)">· calibrate against these two plots</span></p>
+    <div class="grid two" id="multi"></div>
+    <div class="calbar">
+      <div class="chk"><input type="checkbox" id="cross"><label for="cross">show centre crosshair — tune until the country sits under it at zoom ~1</label></div>
+      <div class="calbox"><h4>Skill map (left) · region <span id="calRegion" class="mono">—</span></h4>
+        <div class="rng"><label>zoom <span id="szlbl"></span></label><input id="sz" type="range" min="1" max="9" step="0.25"></div>
+        <div class="rng"><label>nudge x</label><input id="sx" type="range" min="-0.3" max="0.3" step="0.005"></div>
+        <div class="rng"><label>nudge y</label><input id="sy" type="range" min="-0.3" max="0.3" step="0.005"></div>
+      </div>
+      <div class="calbox"><h4>Forecast (right)</h4>
+        <div class="rng"><label>zoom <span id="fzlbl"></span></label><input id="fz" type="range" min="1" max="9" step="0.25"></div>
+        <div class="rng"><label>nudge x</label><input id="fx" type="range" min="-0.3" max="0.3" step="0.005"></div>
+        <div class="rng"><label>nudge y</label><input id="fy" type="range" min="-0.3" max="0.3" step="0.005"></div>
+      </div>
+    </div>
+    <p class="note">Calibration is shared by every country in the current region: tune x/y/zoom here, then it applies to all of them. Switching region loads that region's own defaults.</p>
+  </section>
 
   <section><div class="controls"><div class="field"><label for="c">Country</label><select id="c"></select></div></div></section>
 
@@ -99,30 +118,18 @@
     <p class="lbl">Provider skill — correlation, zoomed to <span id="cl1" style="text-transform:none;letter-spacing:0">country</span></p>
     <div class="grid cards" id="skill"></div>
     <p class="note">Higher correlation = more skill. Set each provider good/ok/bad — the grouping below updates live.
-      If the country isn't centred, adjust the skill-map calibration in Advanced (toggle the crosshair to help).</p>
+      If the country isn't centred, adjust the skill-map calibration in the C3S panel above (toggle the crosshair to help).</p>
   </section>
 
   <section>
     <p class="lbl">Forecasts grouped by skill — <span id="cl2" style="text-transform:none;letter-spacing:0">country</span></p>
     <div class="groups" id="groups"></div>
-    <p class="note">Live interactive C3S charts (drag/zoom/fullscreen inside any tile). Zoom is a CSS magnify toward the country; fine-tune in Advanced.</p>
+    <p class="note">Live interactive C3S charts (drag/zoom/fullscreen inside any tile). Zoom is a CSS magnify toward the country; fine-tune in the C3S panel above.</p>
   </section>
 
   <details class="adv">
-    <summary>Advanced — calibration &amp; sources</summary>
-    <div class="chk"><input type="checkbox" id="cross"><label for="cross">show centre crosshair (calibrate until the country sits under it at zoom ~1)</label></div>
-    <p class="note" style="margin:0 0 12px">Calibration is shared by every country in the current region (<b id="calRegion" class="mono">—</b>): nudge&nbsp;x/y shifts the focus under the crosshair, zoom magnifies. Switching to another country in the same region reuses these; switching regions loads that region's own defaults.</p>
+    <summary>Advanced — forecast product &amp; sources</summary>
     <div class="calcol">
-      <div class="calbox"><h4>Skill maps (PNG)</h4>
-        <div class="rng"><label>zoom <span id="szlbl"></span></label><input id="sz" type="range" min="1" max="9" step="0.25"></div>
-        <div class="rng"><label>nudge x</label><input id="sx" type="range" min="-0.3" max="0.3" step="0.005"></div>
-        <div class="rng"><label>nudge y</label><input id="sy" type="range" min="-0.3" max="0.3" step="0.005"></div>
-      </div>
-      <div class="calbox"><h4>Forecast charts (embed)</h4>
-        <div class="rng"><label>zoom <span id="fzlbl"></span></label><input id="fz" type="range" min="1" max="9" step="0.25"></div>
-        <div class="rng"><label>nudge x</label><input id="fx" type="range" min="-0.3" max="0.3" step="0.005"></div>
-        <div class="rng"><label>nudge y</label><input id="fy" type="range" min="-0.3" max="0.3" step="0.005"></div>
-      </div>
       <div class="calbox"><h4>Forecast product</h4>
         <select id="ftype" style="width:100%">
           <option value="tsum">Tercile summary</option>
