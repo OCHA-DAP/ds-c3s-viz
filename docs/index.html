@@ -41,10 +41,9 @@
   .card .head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 11px;border-bottom:1px solid var(--line)}
   .card .head .nm{font-weight:700;font-size:13px}.card .head .tok{font-size:10px;color:var(--muted)}
   .vp{position:relative;overflow:hidden;background:#fff;display:flex;align-items:center;justify-content:center}
-  .vp.sk{aspect-ratio:9/5}
-  .vp.fc{aspect-ratio:600/457}
+  .vp.sk,.vp.fc{aspect-ratio:1/1}
   .vp img{width:100%;display:block;transform-origin:center;transition:transform .2s ease}
-  .vp.sk img{position:absolute;inset:0;width:100%;height:100%;object-fit:fill}
+  .vp.sk img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
   .vp .scaler{position:absolute;inset:0;transform-origin:center}
   .vp iframe{width:100%;height:100%;border:0;display:block}
   .vp .ph{color:var(--muted);font-size:12px;text-align:center;padding:14px}
@@ -55,12 +54,12 @@
   .b-good{background:var(--good)}.b-ok{background:var(--ok)}.b-bad{background:var(--bad)}.b-none{background:var(--none)}
   .card .foot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 11px;border-top:1px solid var(--line)}
   .card .foot select{min-width:0;padding:6px 8px;font-size:12px;flex:1}
-  .groups{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
-  @media(max-width:900px){.groups{grid-template-columns:1fr}}
+  .groups{display:flex;flex-direction:column;gap:16px}
+  @media(max-width:560px){.group .stack{grid-template-columns:1fr}}
   .group{border:1px solid var(--line);border-radius:13px;background:rgba(255,255,255,.4);padding:12px}
   .group h3{margin:0 0 10px;font-size:13px;font-weight:900;letter-spacing:.04em;display:flex;align-items:center;gap:8px}
   .group h3 .pip{width:11px;height:11px;border-radius:3px}
-  .group.empty{opacity:.55}.group .stack{display:grid;gap:12px}
+  .group.empty{opacity:.55}.group .stack{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}
   .note{font-size:12px;color:var(--muted);margin-top:8px}
   details.adv{margin-top:30px;border:1px dashed var(--line);border-radius:11px;padding:0 14px;background:rgba(255,255,255,.3)}
   details.adv summary{cursor:pointer;font-size:12px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--muted);padding:12px 0}
@@ -194,8 +193,10 @@ const AREAS={
   "Tropics":         {code:"area14", ext:[-180,180,30,-30], fit:[.02,.10,.98,.80]},
 };
 // Skill PNGs are always the global verification map: its geographic window + frame layout.
+// fit accounts for the PNG margins AND the letterbox from showing a 1.8:1 image in a square
+// (object-fit:contain centres it in a ~0.22–0.78 vertical band).
 const SKILL_EXT=[-180,180,90,-90];
-const SKILL_FIT=[.045,.13,.965,.78];
+const SKILL_FIT=[.045,.294,.965,.656];
 
 const COUNTRY={
   "Niger (south)":{bbox:[0.1,11.6,16.0,17.0],region:"Africa"},"Niger (all)":{bbox:[0.1,11.6,16.0,23.6],region:"Africa"},
@@ -240,7 +241,8 @@ function tfm(cal,ext,fit){const b=COUNTRY[state.country].bbox;
   return `transform:scale(${cal.z});transform-origin:${x.toFixed(2)}% ${y.toFixed(2)}%`;}
 
 function badge(cls){return `<span class="badge b-${cls}">${cls==='none'?'unset':cls}</span>`;}
-const GROUPS=[["good","var(--good)"],["ok","var(--ok)"],["bad","var(--bad)"]];
+const GROUPS=[["good","var(--good)"],["ok","var(--ok)"],["bad","var(--bad)"],["none","var(--none)"]];
+const GROUP_LBL={good:"GOOD",ok:"OK",bad:"BAD",none:"UNGROUPED"};
 const crossCls=()=>state.cross?" cross":"";
 
 /* ===================== render ===================== */
@@ -283,7 +285,7 @@ function renderGroups(){
     const inner=keys.length?keys.map(k=>{const p=PROVIDERS.find(x=>x.key===k);
       return `<div class="card"><div class="head"><span class="nm">${p.name}</span></div>${forecastFrame(p.oc,true)}</div>`;}).join("")
       :`<div class="note">— none —</div>`;
-    return `<div class="group ${keys.length?'':'empty'}"><h3><span class="pip" style="background:${col}"></span>${g.toUpperCase()} (${keys.length})</h3><div class="stack">${inner}</div></div>`;}).join("");}
+    return `<div class="group ${keys.length?'':'empty'}"><h3><span class="pip" style="background:${col}"></span>${GROUP_LBL[g]} (${keys.length})</h3><div class="stack">${inner}</div></div>`;}).join("");}
 
 /* ===================== orchestration ===================== */
 function imgLoads(url){return new Promise(r=>{const i=new Image();i.onload=()=>r(true);i.onerror=()=>r(false);i.src=url;});}
@@ -294,10 +296,14 @@ async function resolveMulti(){
 function rebuild(){state.ts=timeSpec(+$("y").value,+$("m").value,$("t").value);renderReadout();
   state.multiTok=null;renderMulti();resolveMulti();
   if(state.country){renderSkill();renderGroups();}}
-function refreshCountry(){state.country=$("c").value;
+// session cache of edited calibration per region (so switching country/region keeps your edits)
+const calCache={};
+function loadRegionCal(){const c=calCache[state.region]||calFor(state.region);
+  state.sk={...c.sk}; state.fc={...c.fc}; syncSliders();}
+function cacheCal(){calCache[state.region]={sk:{...state.sk},fc:{...state.fc}};}
+function refreshCountry(){const prev=state.region; state.country=$("c").value;
   state.region=(state.country&&COUNTRY[state.country].region)||"Global";
-  const cal=calFor(state.region); state.sk={...cal.sk}; state.fc={...cal.fc};
-  syncSliders();
+  if(state.region!==prev) loadRegionCal();          // only reset calibration when the region changes
   renderMulti();renderSkill();renderGroups();}
 function setCls(sel){state.cls[sel.dataset.k]=sel.value;renderSkill();renderGroups();}
 function reZoom(){renderMulti();renderSkill();renderGroups();}
@@ -309,19 +315,30 @@ function syncSliders(){
   $("calRegion").textContent=state.region;$("calArea").textContent=areaFor(state.region).code;
   $("saveStatus").textContent="";}
 
-/* ===== local calibration save (dev only — never runs on the static site) ===== */
+/* ===== calibration save: writes to file via tools/serve.py on localhost,
+   otherwise copies the REGION_CAL line to the clipboard to paste in by hand ===== */
 const isLocal=()=>["localhost","127.0.0.1"].includes(location.hostname);
+const fnum=v=>String(Math.round(v*1e4)/1e4);
+const calLine=()=>{const s=state.sk,f=state.fc;
+  return `"${state.region}": {sk:{x:${fnum(s.x)},y:${fnum(s.y)},z:${fnum(s.z)}}, fc:{x:${fnum(f.x)},y:${fnum(f.y)},z:${fnum(f.z)}}},`;};
+function setStatus(msg,col){$("saveStatus").style.color=col;$("saveStatus").textContent=msg;}
 async function saveCal(){
-  $("saveStatus").style.color="var(--muted)";$("saveStatus").textContent="saving…";
-  try{
-    const r=await fetch("/api/save-calibration",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({region:state.region,sk:state.sk,fc:state.fc})});
-    const j=await r.json().catch(()=>({}));
-    if(r.ok){ // reflect the saved numbers as the new in-memory defaults too
-      REGION_CAL[state.region]={sk:{...state.sk},fc:{...state.fc}};
-      $("saveStatus").style.color="var(--accent)";$("saveStatus").textContent=`saved ${state.region} → index.html`;
-    }else{ $("saveStatus").style.color="var(--bad)";$("saveStatus").textContent="error: "+(j.error||r.status); }
-  }catch(e){ $("saveStatus").style.color="var(--bad)";$("saveStatus").textContent="save failed (run tools/serve.py): "+e.message; }
+  // reflect the saved numbers as the new in-memory defaults regardless of path
+  REGION_CAL[state.region]={sk:{...state.sk},fc:{...state.fc}};
+  if(isLocal()){
+    setStatus("saving…","var(--muted)");
+    try{
+      const r=await fetch("/api/save-calibration",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({region:state.region,sk:state.sk,fc:state.fc})});
+      const j=await r.json().catch(()=>({}));
+      if(r.ok) setStatus(`saved ${state.region} → index.html (commit & push)`,"var(--accent)");
+      else setStatus("error: "+(j.error||r.status),"var(--bad)");
+    }catch(e){ setStatus("server not running — copy/paste instead: run tools/serve.py","var(--bad)"); }
+  }else{
+    try{ await navigator.clipboard.writeText(calLine());
+      setStatus(`copied ${state.region} line — paste over it in REGION_CAL`,"var(--accent)");
+    }catch(e){ setStatus(calLine(),"var(--ink)"); }
+  }
 }
 
 function init(){
@@ -340,10 +357,11 @@ function init(){
   $("ftype").addEventListener("change",()=>{state.type=$("ftype").value;renderMulti();renderGroups();});
   $("cross").addEventListener("change",e=>{state.cross=e.target.checked;reZoom();});
   // calibration sliders
-  const bind=(id,grp,key,lbl)=>{const el=$(id);el.addEventListener("input",()=>{state[grp][key]=+el.value;if(lbl)$(lbl).textContent=el.value+"×";reZoom();});};
+  const bind=(id,grp,key,lbl)=>{const el=$(id);el.addEventListener("input",()=>{state[grp][key]=+el.value;if(lbl)$(lbl).textContent=el.value+"×";cacheCal();reZoom();});};
   bind("sz","sk","z","szlbl");bind("sx","sk","x");bind("sy","sk","y");
   bind("fz","fc","z","fzlbl");bind("fx","fc","x");bind("fy","fc","y");
-  if(isLocal()){ $("saveCal").style.display="";$("saveCal").addEventListener("click",saveCal); }
+  $("saveCal").style.display="";$("saveCal").addEventListener("click",saveCal);
+  $("saveCal").textContent=isLocal()?"save region defaults → file":"copy region defaults";
   syncSliders();
   rebuild();
 }
