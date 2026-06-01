@@ -42,15 +42,15 @@
   .card .head .nm{font-weight:700;font-size:13px}.card .head .tok{font-size:10px;color:var(--muted)}
   .vp{position:relative;overflow:hidden;background:#fff;display:flex;align-items:center;justify-content:center}
   .vp.sk,.vp.fc{aspect-ratio:1/1}
-  .vp img{width:100%;display:block;transform-origin:center}
+  .vp img{width:100%;display:block;transform-origin:0 0;-webkit-user-drag:none;user-select:none}
   .vp.sk img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;cursor:grab;touch-action:none}
-  .vp .scaler{position:absolute;inset:0;transform-origin:center}
+  .vp .scaler{position:absolute;inset:0;transform-origin:0 0}
+  /* forecasts render at a fixed pixel size, then scale to fit — so the embed's internal
+     layout is identical on every tile and the shared pan/zoom lines them all up */
+  .vp.fc .fxd{position:absolute;top:0;left:0;width:600px;height:600px;transform-origin:0 0}
   .vp .dragcap{position:absolute;inset:0;z-index:4;cursor:grab;touch-action:none}
   .vp iframe{width:100%;height:100%;border:0;display:block}
   .vp .ph{color:var(--muted);font-size:12px;text-align:center;padding:14px}
-  .vp.cross::after{content:"";position:absolute;left:50%;top:50%;width:14px;height:14px;transform:translate(-50%,-50%);
-    border:1.5px solid #e0114e;border-radius:50%;box-shadow:0 0 0 1px #fff;pointer-events:none;z-index:5}
-  .vp.cross::before{content:"";position:absolute;left:50%;top:50%;width:1px;height:26px;transform:translate(-50%,-50%);background:#e0114e;opacity:.5;pointer-events:none;z-index:5}
   .badge{font-family:"JetBrains Mono",monospace;font-size:10.5px;font-weight:600;padding:3px 8px;border-radius:999px;color:#fff;text-transform:uppercase;letter-spacing:.06em}
   .b-good{background:var(--good)}.b-ok{background:var(--ok)}.b-bad{background:var(--bad)}.b-none{background:var(--none)}
   .card .foot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 11px;border-top:1px solid var(--line)}
@@ -69,6 +69,7 @@
   .calbar .calbox{flex:1;min-width:220px}
   .calbar button{font-family:"JetBrains Mono",monospace;font-size:12px;padding:7px 12px;border:1px solid var(--accent);background:var(--accent);color:#fff;border-radius:8px;cursor:pointer}
   .calbar button:active{transform:translateY(1px)}
+  .calbar .mini{float:right;padding:2px 9px;font-size:10px;border-color:var(--line);background:var(--panel);color:var(--muted)}
   .calcol{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px;padding:0 0 16px}
   .calbox{border:1px solid var(--line);border-radius:9px;padding:10px 12px;background:var(--panel)}
   .calbox h4{margin:0 0 8px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink)}
@@ -81,9 +82,9 @@
 <body>
 <header>
   <h1>C3S seasonal precipitation <span class="dot">·</span> skill &amp; forecast</h1>
-  <p class="sub">Pick an issued month + valid trimester, then a country. Shows the C3S multi-system 3-month precipitation
+  <p class="sub">Pick an issued month + valid trimester + forecast region. Shows the C3S multi-system 3-month precipitation
     correlation (1993–2016 hindcast skill) and current forecast, then each provider's skill map (classify good/ok/bad)
-    and the forecasts grouped by your classification. Pulls directly from ECMWF / Copernicus — no build, no backend.</p>
+    and the forecasts grouped by your classification. Drag/scroll to frame the maps. Pulls directly from ECMWF / Copernicus — no build, no backend.</p>
 </header>
 
 <main>
@@ -101,14 +102,10 @@
   <section><p class="lbl">C3S multi-system <span style="text-transform:none;letter-spacing:0;color:var(--accent)">· drag to pan · scroll to zoom</span></p>
     <div class="grid two" id="multi"></div>
     <div class="calbar">
-      <div class="chk"><input type="checkbox" id="cross"><label for="cross">show centre crosshair</label>
-        <span style="flex:1"></span>
-        <button id="reset" type="button">reset view</button>
-      </div>
-      <div class="calbox"><h4>Skill maps · global verification</h4>
+      <div class="calbox"><h4>Skill maps · global verification <button id="resetSk" type="button" class="mini">reset</button></h4>
         <div class="rng"><label>zoom <span id="szlbl"></span></label><input id="sz" type="range" min="1" max="30" step="0.1"></div>
       </div>
-      <div class="calbox"><h4>Forecasts · <span id="calArea" class="mono" style="color:var(--muted)"></span></h4>
+      <div class="calbox"><h4>Forecasts · <span id="calArea" class="mono" style="color:var(--muted)"></span> <button id="resetFc" type="button" class="mini">reset</button></h4>
         <div class="rng"><label>zoom <span id="fzlbl"></span></label><input id="fz" type="range" min="1" max="15" step="0.1"></div>
       </div>
     </div>
@@ -186,7 +183,7 @@ const $=id=>document.getElementById(id);
 // Pan/zoom is shared per map type. tx,ty are pan as a fraction of the frame; z is zoom.
 // Edit these starting-view defaults and commit to bake them in for everyone.
 const DEFAULTS={sk:{tx:0,ty:0,z:1}, fc:{tx:0,ty:0,z:1}};
-const state={ts:null,region:"Africa",cls:{},type:TYPE_DEFAULT,multiTok:null,cross:false,
+const state={ts:null,region:"Africa",cls:{},type:TYPE_DEFAULT,multiTok:null,
   sk:{...DEFAULTS.sk}, fc:{...DEFAULTS.fc}};
 
 function timeSpec(y,m,trim){const ts=TRIM[trim];let ty=y;if(ts<m)ty++;
@@ -198,29 +195,29 @@ const tfmStr=cal=>`translate(${(cal.tx*100).toFixed(2)}%,${(cal.ty*100).toFixed(
 function badge(cls){return `<span class="badge b-${cls}">${cls==='none'?'unset':cls}</span>`;}
 const GROUPS=[["good","var(--good)"],["ok","var(--ok)"],["bad","var(--bad)"],["none","var(--none)"]];
 const GROUP_LBL={good:"GOOD",ok:"OK",bad:"BAD",none:"UNGROUPED"};
-const crossCls=()=>state.cross?" cross":"";
 
 /* ===================== render ===================== */
 function renderReadout(){const ts=state.ts;
   $("readout").innerHTML=`base_time <b>${ts.base_time}</b> · valid_time <b>${ts.valid_time}</b> · trimester <b>${ts.trim}</b> · leadtime/fcmonth <b>${ts.leadtime}</b>`;}
 
 function skillImg(tok){
-  if(!tok) return `<div class="vp sk${crossCls()}"><div class="ph">no skill map for this system / selection</div></div>`;
+  if(!tok) return `<div class="vp sk"><div class="ph">no skill map for this system / selection</div></div>`;
   const url=VERIF_TPL(state.ts.m,tok,state.ts.leadtime);
-  return `<div class="vp sk${crossCls()}"><img src="${url}" style="transform:${tfmStr(state.sk)}" referrerpolicy="no-referrer"
+  return `<div class="vp sk"><img src="${url}" draggable="false" style="transform:${tfmStr(state.sk)}" referrerpolicy="no-referrer"
     onerror="this.parentNode.innerHTML='<div class=ph>no map for this month/lead</div>'"></div>`;}
 
-// ctl=true adds a transparent overlay so the (otherwise event-capturing) iframe can be dragged
+// fixed-size .fxd wrapper (scaled to fit) keeps the embed layout identical across tiles;
+// ctl=true adds a transparent overlay so the event-capturing iframe can still be dragged
 function forecastFrame(oc,ctl){
   const src=EMBED_TPL(oc,state.ts,state.type,areaFor(state.region));
   const cap=ctl?'<div class="dragcap"></div>':'';
-  return `<div class="vp fc${crossCls()}"><div class="scaler" style="transform:${tfmStr(state.fc)}"><iframe loading="lazy" src="${src}" referrerpolicy="no-referrer" allowfullscreen></iframe></div>${cap}</div>`;}
+  return `<div class="vp fc"><div class="scaler" style="transform:${tfmStr(state.fc)}"><div class="fxd"><iframe loading="lazy" src="${src}" referrerpolicy="no-referrer" allowfullscreen></iframe></div></div>${cap}</div>`;}
 
 function renderMulti(){
   $("multi").innerHTML =
     `<div class="card"><div class="head"><span class="nm">Correlation (skill)</span><span class="tok mono">${state.multiTok||'resolving…'}</span></div>${skillImg(state.multiTok)}</div>` +
     `<div class="card"><div class="head"><span class="nm">Current forecast</span><span class="tok mono">mm</span></div>${forecastFrame(MULTI.oc,true)}</div>`;
-  attachControls();}
+  postRender();}
 
 function renderSkill(){
   $("skill").innerHTML=PROVIDERS.map(p=>{
@@ -232,7 +229,7 @@ function renderSkill(){
       <option value="bad"${cls==='bad'?' selected':''}>bad</option></select>`;
     return `<div class="card"><div class="head"><span class="nm">${p.name}</span><span class="tok mono">${p.verif}</span></div>
       ${skillImg(p.verif)}<div class="foot">${sel}${badge(cls)}</div></div>`;}).join("");
-  attachControls();}
+  postRender();}
 
 function renderGroups(){
   $("groups").innerHTML=GROUPS.map(([g,col])=>{
@@ -255,28 +252,38 @@ function setCls(sel){state.cls[sel.dataset.k]=sel.value;renderSkill();renderGrou
 function setRegion(){state.region=$("region").value;$("calArea").textContent=areaFor(state.region);
   renderMulti();renderGroups();}
 
+const FXD=600;  // fixed render size of each forecast embed, before fit-scaling
+const ZMAX={sk:30,fc:15};
 // live-apply the shared transform to every map of a type, without re-rendering
 function applyTransforms(which){
   if(which!=="fc") document.querySelectorAll(".vp.sk img").forEach(el=>el.style.transform=tfmStr(state.sk));
   if(which!=="sk") document.querySelectorAll(".vp.fc .scaler").forEach(el=>el.style.transform=tfmStr(state.fc));}
+// scale each fixed forecast wrapper to fill its (square) tile
+function applyFit(){document.querySelectorAll(".vp.fc .fxd").forEach(el=>{
+  const w=el.closest(".vp").clientWidth; if(w) el.style.transform=`scale(${w/FXD})`;});}
 function syncZoom(){$("sz").value=state.sk.z;$("fz").value=state.fc.z;
   $("szlbl").textContent=state.sk.z.toFixed(1)+"×";$("fzlbl").textContent=state.fc.z.toFixed(1)+"×";}
 
-// drag to pan + wheel to zoom; both shared across all maps of `cal` ("sk"/"fc")
+// zoom keeping the frame fraction (cu,cv) fixed (cursor for wheel, centre for slider)
+function zoomAt(cal,z2,cu,cv){const s=state[cal]; z2=Math.max(1,Math.min(ZMAX[cal],z2)); const ratio=z2/s.z;
+  s.tx=cu-ratio*(cu-s.tx); s.ty=cv-ratio*(cv-s.ty); s.z=z2; syncZoom(); applyTransforms(cal);}
+
+// drag to pan + wheel to zoom-toward-cursor; both shared across all maps of `cal` ("sk"/"fc")
 function attachDrag(el,cal){
   if(el.dataset.bound) return; el.dataset.bound="1";
   let drag=false,lx,ly;
-  el.addEventListener("pointerdown",e=>{drag=true;lx=e.clientX;ly=e.clientY;el.setPointerCapture(e.pointerId);el.style.cursor="grabbing";});
-  el.addEventListener("pointermove",e=>{if(!drag)return; const r=(el.closest(".vp")||el).getBoundingClientRect();
+  el.addEventListener("dragstart",e=>e.preventDefault());
+  el.addEventListener("pointerdown",e=>{e.preventDefault();drag=true;lx=e.clientX;ly=e.clientY;el.setPointerCapture(e.pointerId);el.style.cursor="grabbing";});
+  el.addEventListener("pointermove",e=>{if(!drag)return; const r=el.closest(".vp").getBoundingClientRect();
     state[cal].tx+=(e.clientX-lx)/r.width; state[cal].ty+=(e.clientY-ly)/r.height; lx=e.clientX;ly=e.clientY; applyTransforms(cal);});
   const end=()=>{drag=false;el.style.cursor="grab";};
   el.addEventListener("pointerup",end); el.addEventListener("pointercancel",end);
-  el.addEventListener("wheel",e=>{e.preventDefault();
-    state[cal].z=Math.max(1,Math.min(cal==="sk"?30:15, state[cal].z*Math.exp(-e.deltaY*0.0015)));
-    syncZoom(); applyTransforms(cal);},{passive:false});}
-function attachControls(){
+  el.addEventListener("wheel",e=>{e.preventDefault(); const r=el.closest(".vp").getBoundingClientRect();
+    zoomAt(cal, state[cal].z*Math.exp(-e.deltaY*0.0015), (e.clientX-r.left)/r.width, (e.clientY-r.top)/r.height);},{passive:false});}
+function postRender(){
   document.querySelectorAll(".vp.sk img").forEach(el=>attachDrag(el,"sk"));
-  document.querySelectorAll(".vp .dragcap").forEach(el=>attachDrag(el,"fc"));}
+  document.querySelectorAll(".vp .dragcap").forEach(el=>attachDrag(el,"fc"));
+  applyFit();}
 
 function init(){
   $("m").innerHTML=MONTHS.map((mn,i)=>`<option value="${i+1}">${mn}</option>`).join("");
@@ -291,10 +298,11 @@ function init(){
   $("ydn").onclick=()=>{$("y").value=+$("y").value-1;rebuild();};
   $("region").addEventListener("change",setRegion);
   $("ftype").addEventListener("change",()=>{state.type=$("ftype").value;renderMulti();renderGroups();});
-  $("cross").addEventListener("change",e=>{state.cross=e.target.checked;renderMulti();renderSkill();renderGroups();});
-  $("sz").addEventListener("input",()=>{state.sk.z=+$("sz").value;syncZoom();applyTransforms("sk");});
-  $("fz").addEventListener("input",()=>{state.fc.z=+$("fz").value;syncZoom();applyTransforms("fc");});
-  $("reset").addEventListener("click",()=>{state.sk={...DEFAULTS.sk};state.fc={...DEFAULTS.fc};syncZoom();applyTransforms();});
+  $("sz").addEventListener("input",()=>zoomAt("sk",+$("sz").value,.5,.5));
+  $("fz").addEventListener("input",()=>zoomAt("fc",+$("fz").value,.5,.5));
+  $("resetSk").addEventListener("click",()=>{state.sk={...DEFAULTS.sk};syncZoom();applyTransforms("sk");});
+  $("resetFc").addEventListener("click",()=>{state.fc={...DEFAULTS.fc};syncZoom();applyTransforms("fc");});
+  window.addEventListener("resize",applyFit);
   syncZoom();
   rebuild();
 }

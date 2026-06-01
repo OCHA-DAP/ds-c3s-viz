@@ -29,12 +29,14 @@ Pulls straight from ECMWF / Copernicus. No data infrastructure, no build, no Pyt
   the dropdown; the grouped forecasts update live.
 
 ## Framing the maps
-- **Drag** any skill map (or the C3S forecast map) to pan; **scroll** over it to zoom. There are
-  also zoom sliders under the two C3S plots, and a **reset view** button.
+- **Drag** any skill map (or the C3S forecast map) to pan; **scroll** to zoom toward the cursor.
+  There are also zoom sliders and separate **reset** buttons for skill and forecast.
 - The view is **shared per type**: panning/zooming any skill map moves all skill maps; the forecast
   pan/zoom moves all forecast maps. Skill and forecast move independently.
 - The **forecast region** dropdown picks the continent embed (Africa = area11, etc.); skill maps are
   always the global verification PNG.
+- Forecasts render in a fixed-size wrapper (`FXD` px) that's scaled to fit each tile, so the embed's
+  internal layout is identical everywhere and the shared pan/zoom lines them all up.
 
 ## Config (top of the `<script>`)
 - `PROVIDERS` — name, OpenCharts centre code, verification token.
