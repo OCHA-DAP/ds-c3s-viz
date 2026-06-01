@@ -150,15 +150,15 @@ const VERIF_TPL=(stm,tok,fc)=>`https://sites.ecmwf.int/cxep/c3s-seasonal-verific
 const EMBED_TPL=(oc,ts,type,area)=>`https://climate.copernicus.eu/charts/embed/c3s_seasonal/c3s_seasonal_spatial_${oc}_rain_3m?area=${area}&base_time=${ts.base_time}&player_dimension=valid_time&type=${type}&valid_time=${ts.valid_time}`;
 
 const PROVIDERS=[
-  {key:"ecmwf",name:"ECMWF",oc:"ecmf",verif:"ecmwf_s51"},
-  {key:"ukmo",name:"UK Met Office",oc:"egrr",verif:"ukmo_s603"},
+  {key:"ecmwf",name:"ECMWF",oc:"ecmf",verif:"ecmwf_s51"},          // SEAS5.1
+  {key:"ukmo",name:"UK Met Office",oc:"egrr",verif:"ukmo_s610"},   // GloSea6
   {key:"meteofr",name:"Météo-France",oc:"lfpw",verif:"meteo_france_s9"},
-  {key:"dwd",name:"DWD",oc:"edzw",verif:"dwd_s21"},
-  {key:"cmcc",name:"CMCC",oc:"cmcc",verif:"cmcc_s35"},
-  {key:"ncep",name:"NCEP",oc:"kwbc",verif:"ncep_s2"},
-  {key:"jma",name:"JMA",oc:"rjtd",verif:"jma_s3"},
-  {key:"eccc",name:"ECCC",oc:"cwao",verif:"eccc_s3"},
-  {key:"bom",name:"BOM",oc:"ammc",verif:"bom_s2"},
+  {key:"dwd",name:"DWD",oc:"edzw",verif:"dwd_s22"},                // GCFS2.2
+  {key:"cmcc",name:"CMCC",oc:"cmcc",verif:"cmcc_s4"},              // SPS4
+  {key:"ncep",name:"NCEP",oc:"kwbc",verif:"ncep_s2"},              // CFSv2
+  {key:"jma",name:"JMA",oc:"rjtd",verif:"jma_s4"},                 // CPS4
+  {key:"eccc",name:"ECCC",oc:"cwao",verif:"eccc_s5"},             // GEM5.2-NEMO
+  {key:"bom",name:"BOM",oc:"ammc",verif:"bom_s2"},                 // ACCESS-S2
 ];
 const MULTI={key:"multi",name:"C3S multi-system",oc:"mm"};
 const MULTI_CANDS=["C3Smm_s2026","C3Smm_s2025","C3Smm_s2024","C3Smm_s2023"];  // year-versioned
@@ -276,6 +276,15 @@ function postRender(){
   document.querySelectorAll(".vp .dragcap").forEach(el=>attachDrag(el,"fc"));
   applyFit();}
 
+// Valid 3-month seasons for an issued month are those starting 1–3 months after issue
+// (e.g. May → JJA, JAS, ASO). Grey out the rest; keep a valid season selected.
+function updateTrimOptions(){
+  const m=+$("m").value; let firstOk=null;
+  [...$("t").options].forEach(o=>{const off=((TRIM[o.value]-m)%12+12)%12;
+    o.disabled=!(off>=1&&off<=3); if(!o.disabled&&firstOk===null) firstOk=o.value;});
+  if($("t").selectedOptions[0].disabled) $("t").value=firstOk;
+}
+
 function init(){
   $("m").innerHTML=MONTHS.map((mn,i)=>`<option value="${i+1}">${mn}</option>`).join("");
   $("t").innerHTML=Object.keys(TRIM).map(k=>`<option value="${k}">${k}</option>`).join("");
@@ -283,7 +292,9 @@ function init(){
   const now=new Date(),cy=now.getFullYear(),cm=now.getMonth()+1;
   $("m").value="5";$("t").value="JAS";$("y").value=(5<=cm?cy:cy-1);
   $("region").value=state.region;
-  ["m","t"].forEach(id=>$(id).addEventListener("change",rebuild));
+  updateTrimOptions();
+  $("m").addEventListener("change",()=>{updateTrimOptions();rebuild();});
+  $("t").addEventListener("change",rebuild);
   $("y").addEventListener("change",rebuild);
   $("yup").onclick=()=>{$("y").value=+$("y").value+1;rebuild();};
   $("ydn").onclick=()=>{$("y").value=+$("y").value-1;rebuild();};

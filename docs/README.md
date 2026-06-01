@@ -16,9 +16,10 @@ Pulls straight from ECMWF / Copernicus. No data infrastructure, no build, no Pyt
 ## How it works (all verified live against the servers)
 - **Skill maps**: static PNGs from the C3S verification gallery
   `sites.ecmwf.int/cxep/c3s-seasonal-verification/...monthly.3m.fcmonth<L>.tp.corr.png`,
-  shown as `<img>` and CSS-zoomed toward the country. Provider system tokens are baked in
-  (confirmed): ecmwf_s51, ukmo_s603, meteo_france_s9, dwd_s21, cmcc_s35, ncep_s2, jma_s3,
-  eccc_s3, bom_s2. 3-month windows are labelled by their first lead month (= leadtime).
+  shown as `<img>` and dragged/zoomed. Provider system tokens are the latest C3S systems
+  (confirmed against the gallery): ecmwf_s51, ukmo_s610, meteo_france_s9, dwd_s22, cmcc_s4,
+  ncep_s2, jma_s4, eccc_s5, bom_s2. The verification `fcmonth` is the lead to the **last**
+  month of the 3-month window (= leadtime + 2).
 - **Forecasts**: the C3S charts are interactive "player" plots with no static image URL,
   so each is an **embedded** OpenCharts product page (`charts.ecmwf.int/products/
   c3s_seasonal_spatial_<centre>_rain_3m?...&area=<region>`). Framing is allowed (no
