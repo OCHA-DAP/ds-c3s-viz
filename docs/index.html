@@ -41,7 +41,7 @@
   .card .head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 11px;border-bottom:1px solid var(--line)}
   .card .head .nm{font-weight:700;font-size:13px}.card .head .tok{font-size:10px;color:var(--muted)}
   .vp{position:relative;overflow:hidden;background:#fff;display:flex;align-items:center;justify-content:center}
-  .vp.sk{height:210px}
+  .vp.sk{min-height:120px}
   .vp.fc{aspect-ratio:600/457}
   .vp img{width:100%;display:block;transform-origin:center;transition:transform .2s ease}
   .vp .scaler{position:absolute;inset:0;transform-origin:center}
@@ -111,20 +111,17 @@
   <details class="adv">
     <summary>Advanced — calibration &amp; sources</summary>
     <div class="chk"><input type="checkbox" id="cross"><label for="cross">show centre crosshair (calibrate until the country sits under it at zoom ~1)</label></div>
+    <p class="note" style="margin:0 0 12px">Calibration is shared by every country in the current region (<b id="calRegion" class="mono">—</b>): nudge&nbsp;x/y shifts the focus under the crosshair, zoom magnifies. Switching to another country in the same region reuses these; switching regions loads that region's own defaults.</p>
     <div class="calcol">
       <div class="calbox"><h4>Skill maps (PNG)</h4>
-        <div class="rng"><label>zoom <span id="szlbl"></span></label><input id="sz" type="range" min="1" max="9" step="0.5" value="4"></div>
-        <div class="rng"><label>map left</label><input id="sx0" type="range" min="0" max="0.25" step="0.005" value="0.045"></div>
-        <div class="rng"><label>map top</label><input id="sy0" type="range" min="0" max="0.3" step="0.005" value="0.13"></div>
-        <div class="rng"><label>map right</label><input id="sx1" type="range" min="0.75" max="1" step="0.005" value="0.965"></div>
-        <div class="rng"><label>map bottom</label><input id="sy1" type="range" min="0.6" max="1" step="0.005" value="0.78"></div>
+        <div class="rng"><label>zoom <span id="szlbl"></span></label><input id="sz" type="range" min="1" max="9" step="0.25"></div>
+        <div class="rng"><label>nudge x</label><input id="sx" type="range" min="-0.3" max="0.3" step="0.005"></div>
+        <div class="rng"><label>nudge y</label><input id="sy" type="range" min="-0.3" max="0.3" step="0.005"></div>
       </div>
       <div class="calbox"><h4>Forecast charts (embed)</h4>
-        <div class="rng"><label>zoom <span id="fzlbl"></span></label><input id="fz" type="range" min="1" max="9" step="0.5" value="3"></div>
-        <div class="rng"><label>map left</label><input id="fx0" type="range" min="0" max="0.25" step="0.005" value="0.02"></div>
-        <div class="rng"><label>map top</label><input id="fy0" type="range" min="0" max="0.3" step="0.005" value="0.10"></div>
-        <div class="rng"><label>map right</label><input id="fx1" type="range" min="0.75" max="1" step="0.005" value="0.98"></div>
-        <div class="rng"><label>map bottom</label><input id="fy1" type="range" min="0.6" max="1" step="0.005" value="0.80"></div>
+        <div class="rng"><label>zoom <span id="fzlbl"></span></label><input id="fz" type="range" min="1" max="9" step="0.25"></div>
+        <div class="rng"><label>nudge x</label><input id="fx" type="range" min="-0.3" max="0.3" step="0.005"></div>
+        <div class="rng"><label>nudge y</label><input id="fy" type="range" min="-0.3" max="0.3" step="0.005"></div>
       </div>
       <div class="calbox"><h4>Forecast product</h4>
         <select id="ftype" style="width:100%">
@@ -135,8 +132,8 @@
           <option value="prob">Prob. exceeding median</option>
         </select>
         <p class="note" style="margin-top:10px">Skill maps are global PNGs from the C3S verification gallery; forecasts are the
-          global embed (area08) magnified to the country. Both use lon/lat→pixel mapping over a [-180,180]×[90,-90] map; the
-          sliders set where the map sits inside each frame.</p>
+          region's continent embed (e.g. Africa = area11) magnified toward the country. The country's position is computed from
+          its bbox via each map's geographic window; the sliders apply a per-region x/y nudge and zoom on top.</p>
       </div>
     </div>
   </details>
@@ -152,7 +149,7 @@
 /* ===================== CONFIG ===================== */
 const TYPE_DEFAULT="tsum";
 const VERIF_TPL=(stm,tok,fc)=>`https://sites.ecmwf.int/cxep/c3s-seasonal-verification/plots/stmonth${pad(stm)}/${tok}_stmonth${pad(stm)}_hindcast1993-2016_monthly.3m.fcmonth${fc}.tp.corr.png`;
-const EMBED_TPL=(oc,ts,type)=>`https://climate.copernicus.eu/charts/embed/c3s_seasonal/c3s_seasonal_spatial_${oc}_rain_3m?area=area08&base_time=${ts.base_time}&player_dimension=valid_time&type=${type}&valid_time=${ts.valid_time}`;
+const EMBED_TPL=(oc,ts,type,area)=>`https://climate.copernicus.eu/charts/embed/c3s_seasonal/c3s_seasonal_spatial_${oc}_rain_3m?area=${area}&base_time=${ts.base_time}&player_dimension=valid_time&type=${type}&valid_time=${ts.valid_time}`;
 
 const PROVIDERS=[
   {key:"ecmwf",name:"ECMWF",oc:"ecmf",verif:"ecmwf_s51"},
@@ -168,28 +165,64 @@ const PROVIDERS=[
 const MULTI={key:"multi",name:"C3S multi-system",oc:"mm"};
 const MULTI_CANDS=["C3Smm_s2026","C3Smm_s2025","C3Smm_s2024","C3Smm_s2023"];  // year-versioned
 
-const COUNTRY={
-  "Niger (south)":{bbox:[0.1,11.6,16.0,17.0]},"Niger (all)":{bbox:[0.1,11.6,16.0,23.6]},
-  "Burkina Faso":{bbox:[-5.6,9.3,2.5,15.2]},"Nigeria":{bbox:[2.6,4.2,14.7,13.9]},
-  "Nigeria — Adamawa":{bbox:[11.5,7.5,13.8,11.0]},"Central African Rep.":{bbox:[14.3,2.2,27.5,11.1]},
-  "Mozambique":{bbox:[30.0,-27.0,41.5,-10.3]},"Haiti":{bbox:[-74.6,17.9,-71.2,20.2]},"Vanuatu":{bbox:[166.0,-20.5,170.5,-13.0]},
+// C3S embed regions: continent area code + geographic window [lonW,lonE,latN,latS]
+// + where that window sits inside the frame [x0,y0,x1,y1] (margins for title/legend).
+// ext/fit are starting guesses — calibrate per region with the crosshair, then hardcode.
+const AREAS={
+  "Global":          {code:"area08", ext:[-180,180,90,-90], fit:[.02,.10,.98,.80]},
+  "Africa":          {code:"area11", ext:[-20,55,40,-40],   fit:[.06,.08,.94,.86]},
+  "North America":   {code:"area06", ext:[-170,-50,75,7],   fit:[.06,.08,.94,.86]},
+  "Pacific Islands": {code:"area31", ext:[120,240,30,-50],  fit:[.06,.08,.94,.86]},
+  "Europe":          {code:"area01", ext:[-15,45,72,33],    fit:[.06,.08,.94,.86]},
+  "Asia":            {code:"area09", ext:[25,180,80,-15],   fit:[.06,.08,.94,.86]},
+  "South America":   {code:"area13", ext:[-90,-30,15,-60],  fit:[.06,.08,.94,.86]},
+  "Tropics":         {code:"area14", ext:[-180,180,30,-30], fit:[.02,.10,.98,.80]},
 };
+// Skill PNGs are always the global verification map: its geographic window + frame layout.
+const SKILL_EXT=[-180,180,90,-90];
+const SKILL_FIT=[.045,.13,.965,.78];
+
+const COUNTRY={
+  "Niger (south)":{bbox:[0.1,11.6,16.0,17.0],region:"Africa"},"Niger (all)":{bbox:[0.1,11.6,16.0,23.6],region:"Africa"},
+  "Burkina Faso":{bbox:[-5.6,9.3,2.5,15.2],region:"Africa"},"Nigeria":{bbox:[2.6,4.2,14.7,13.9],region:"Africa"},
+  "Nigeria — Adamawa":{bbox:[11.5,7.5,13.8,11.0],region:"Africa"},"Central African Rep.":{bbox:[14.3,2.2,27.5,11.1],region:"Africa"},
+  "Mozambique":{bbox:[30.0,-27.0,41.5,-10.3],region:"Africa"},"Haiti":{bbox:[-74.6,17.9,-71.2,20.2],region:"North America"},"Vanuatu":{bbox:[166.0,-20.5,170.5,-13.0],region:"Pacific Islands"},
+};
+
+// Per-region calibration defaults: {x,y} nudge the country centre in the frame, z = zoom.
+// Shared by all countries in the region; tune once with the crosshair and hardcode here.
+const REGION_CAL={
+  "Global":          {sk:{x:0,y:0,z:4}, fc:{x:0,y:0,z:3}},
+  "Africa":          {sk:{x:0,y:0,z:4}, fc:{x:0,y:0,z:2.5}},
+  "North America":   {sk:{x:0,y:0,z:4}, fc:{x:0,y:0,z:4}},
+  "Pacific Islands": {sk:{x:0,y:0,z:4}, fc:{x:0,y:0,z:4}},
+  "Europe":          {sk:{x:0,y:0,z:4}, fc:{x:0,y:0,z:3}},
+  "Asia":            {sk:{x:0,y:0,z:4}, fc:{x:0,y:0,z:3}},
+  "South America":   {sk:{x:0,y:0,z:4}, fc:{x:0,y:0,z:3}},
+  "Tropics":         {sk:{x:0,y:0,z:4}, fc:{x:0,y:0,z:3}},
+};
+const calFor=r=>REGION_CAL[r]||REGION_CAL["Global"];
+const areaFor=r=>AREAS[r]||AREAS["Global"];
 const TRIM={JFM:1,FMA:2,MAM:3,AMJ:4,MJJ:5,JJA:6,JAS:7,ASO:8,SON:9,OND:10,NDJ:11,DJF:12};
 const MONTHS=["January","February","March","April","May","June","July","August","September","October","November","December"];
 
 /* ===================== state ===================== */
 const pad=n=>String(n).padStart(2,"0");
 const $=id=>document.getElementById(id);
-const state={ts:null,country:null,cls:{},type:TYPE_DEFAULT,multiTok:null,cross:false,
-  sk:{z:4,x0:.045,y0:.13,x1:.965,y1:.78}, fc:{z:3,x0:.02,y0:.10,x1:.98,y1:.80}};
+const state={ts:null,country:null,region:"Global",cls:{},type:TYPE_DEFAULT,multiTok:null,cross:false,
+  sk:{x:0,y:0,z:4}, fc:{x:0,y:0,z:3}};
 
 function timeSpec(y,m,trim){const ts=TRIM[trim];let ty=y;if(ts<m)ty++;
   const lead=(ty*12+(ts-1))-(y*12+(m-1))+1;
   return {y,m,trim,tStart:ts,tYear:ty,leadtime:lead,base_time:`${y}${pad(m)}010000`,valid_time:`${ty}${pad(ts)}010000`};}
-// lon/lat -> fraction of frame, given a calibration {x0,y0,x1,y1} (global [-180,180]x[90,-90])
-function frac(lon,lat,cal){return {x:cal.x0+((lon+180)/360)*(cal.x1-cal.x0), y:cal.y0+((90-lat)/180)*(cal.y1-cal.y0)};}
-function ctrFrac(cal){const b=COUNTRY[state.country].bbox;return frac((b[0]+b[2])/2,(b[1]+b[3])/2,cal);}
-function tfm(cal){const c=ctrFrac(cal);return `transform:scale(${cal.z});transform-origin:${(c.x*100).toFixed(1)}% ${(c.y*100).toFixed(1)}%`;}
+// lon/lat -> fraction of frame for a map's geographic window [lonW,lonE,latN,latS] sitting at fit [x0,y0,x1,y1]
+function geoFrac(lon,lat,ext,fit){const nx=(lon-ext[0])/(ext[1]-ext[0]),ny=(ext[2]-lat)/(ext[2]-ext[3]);
+  return {x:fit[0]+nx*(fit[2]-fit[0]), y:fit[1]+ny*(fit[3]-fit[1])};}
+// transform-origin = country bbox centre on the map, plus the per-region x/y nudge; scale = zoom
+function tfm(cal,ext,fit){const b=COUNTRY[state.country].bbox;
+  const f=geoFrac((b[0]+b[2])/2,(b[1]+b[3])/2,ext,fit);
+  const x=(f.x+cal.x)*100, y=(f.y+cal.y)*100;
+  return `transform:scale(${cal.z});transform-origin:${x.toFixed(2)}% ${y.toFixed(2)}%`;}
 
 function badge(cls){return `<span class="badge b-${cls}">${cls==='none'?'unset':cls}</span>`;}
 const GROUPS=[["good","var(--good)"],["ok","var(--ok)"],["bad","var(--bad)"]];
@@ -202,13 +235,14 @@ function renderReadout(){const ts=state.ts;
 function skillImg(tok,zoom){
   if(!tok) return `<div class="vp sk${crossCls()}"><div class="ph">no skill map for this system / selection</div></div>`;
   const url=VERIF_TPL(state.ts.m,tok,state.ts.leadtime);
-  const st=zoom?tfm(state.sk):"";
+  const st=zoom?tfm(state.sk,SKILL_EXT,SKILL_FIT):"";
   return `<div class="vp sk${crossCls()}"><img src="${url}" style="${st}" referrerpolicy="no-referrer"
     onerror="this.parentNode.innerHTML='<div class=ph>no map for this month/lead</div>'"></div>`;}
 
 function forecastFrame(oc,zoom){
-  const src=EMBED_TPL(oc,state.ts,state.type);
-  const st=zoom?tfm(state.fc):"";
+  const a=areaFor(state.region);
+  const src=EMBED_TPL(oc,state.ts,state.type,a.code);
+  const st=zoom?tfm(state.fc,a.ext,a.fit):"";
   return `<div class="vp fc${crossCls()}"><div class="scaler" style="${st}"><iframe loading="lazy" src="${src}" referrerpolicy="no-referrer" allowfullscreen></iframe></div></div>`;}
 
 function renderMulti(){
@@ -245,9 +279,19 @@ async function resolveMulti(){
 function rebuild(){state.ts=timeSpec(+$("y").value,+$("m").value,$("t").value);renderReadout();
   state.multiTok=null;renderMulti();resolveMulti();
   if(state.country){renderSkill();renderGroups();}}
-function refreshCountry(){state.country=$("c").value;renderMulti();renderSkill();renderGroups();}
+function refreshCountry(){state.country=$("c").value;
+  state.region=(state.country&&COUNTRY[state.country].region)||"Global";
+  const cal=calFor(state.region); state.sk={...cal.sk}; state.fc={...cal.fc};
+  syncSliders();
+  renderMulti();renderSkill();renderGroups();}
 function setCls(sel){state.cls[sel.dataset.k]=sel.value;renderSkill();renderGroups();}
 function reZoom(){renderMulti();renderSkill();renderGroups();}
+// push current state.sk/fc into the slider positions + labels (after a region change)
+function syncSliders(){
+  $("sz").value=state.sk.z;$("sx").value=state.sk.x;$("sy").value=state.sk.y;
+  $("fz").value=state.fc.z;$("fx").value=state.fc.x;$("fy").value=state.fc.y;
+  $("szlbl").textContent=state.sk.z+"×";$("fzlbl").textContent=state.fc.z+"×";
+  $("calRegion").textContent=state.region;}
 
 function init(){
   $("m").innerHTML=MONTHS.map((mn,i)=>`<option value="${i+1}">${mn}</option>`).join("");
@@ -256,6 +300,7 @@ function init(){
   const now=new Date(),cy=now.getFullYear(),cm=now.getMonth()+1;
   $("m").value="5";$("t").value="JAS";$("y").value=(5<=cm?cy:cy-1);
   $("c").value="Niger (south)";state.country="Niger (south)";
+  state.region=COUNTRY[state.country].region; const _c=calFor(state.region); state.sk={..._c.sk}; state.fc={..._c.fc};
   ["m","t"].forEach(id=>$(id).addEventListener("change",rebuild));
   $("y").addEventListener("change",rebuild);
   $("yup").onclick=()=>{$("y").value=+$("y").value+1;rebuild();};
@@ -265,9 +310,9 @@ function init(){
   $("cross").addEventListener("change",e=>{state.cross=e.target.checked;reZoom();});
   // calibration sliders
   const bind=(id,grp,key,lbl)=>{const el=$(id);el.addEventListener("input",()=>{state[grp][key]=+el.value;if(lbl)$(lbl).textContent=el.value+"×";reZoom();});};
-  bind("sz","sk","z","szlbl");bind("sx0","sk","x0");bind("sy0","sk","y0");bind("sx1","sk","x1");bind("sy1","sk","y1");
-  bind("fz","fc","z","fzlbl");bind("fx0","fc","x0");bind("fy0","fc","y0");bind("fx1","fc","x1");bind("fy1","fc","y1");
-  $("szlbl").textContent="4×";$("fzlbl").textContent="3×";
+  bind("sz","sk","z","szlbl");bind("sx","sk","x");bind("sy","sk","y");
+  bind("fz","fc","z","fzlbl");bind("fx","fc","x");bind("fy","fc","y");
+  syncSliders();
   rebuild();
 }
 init();
