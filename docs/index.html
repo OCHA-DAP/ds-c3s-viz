@@ -236,6 +236,20 @@ function skillImg(tok){
   return `<div class="vp sk"><img src="${url}" draggable="false" fetchpriority="high" style="transform:${tfmStr(state.sk)}" referrerpolicy="no-referrer"
     onerror="this.parentNode.innerHTML='<div class=ph>no map for this month/lead</div>'"></div>`;}
 
+// Multi-system token is year-versioned: render the image immediately at the first candidate
+// (so it loads as early as the provider maps) and cascade to older years on error.
+function multiSkillImg(){
+  const url0=VERIF_TPL(state.ts.m,MULTI_CANDS[0],state.ts.fcmonth);
+  return `<div class="vp sk"><img src="${url0}" data-i="0" draggable="false" fetchpriority="high"
+    style="transform:${tfmStr(state.sk)}" referrerpolicy="no-referrer"
+    onload="window.__multiOk(this)" onerror="window.__multiErr(this)"></div>`;}
+window.__multiOk=img=>{state.multiTok=MULTI_CANDS[+img.dataset.i];
+  const l=document.getElementById("multiTok"); if(l) l.textContent=state.multiTok;};
+window.__multiErr=img=>{const i=+img.dataset.i+1;
+  if(i<MULTI_CANDS.length){img.dataset.i=i;img.src=VERIF_TPL(state.ts.m,MULTI_CANDS[i],state.ts.fcmonth);}
+  else{state.multiTok=null;const l=document.getElementById("multiTok");if(l)l.textContent="n/a";
+    img.parentNode.innerHTML='<div class=ph>no multi-system skill for this month/lead</div>';}};
+
 // fixed-size .fxd wrapper (scaled to fit) keeps the embed layout identical across tiles;
 // the transparent overlay lets every forecast tile be dragged/zoomed (iframes eat events)
 function forecastFrame(oc){
@@ -244,7 +258,7 @@ function forecastFrame(oc){
 
 function renderMulti(){
   $("multi").innerHTML =
-    `<div class="card"><div class="head"><span class="nm">Correlation (skill)</span><span class="tok mono">${state.multiTok||'resolving…'}</span></div>${skillImg(state.multiTok)}</div>` +
+    `<div class="card"><div class="head"><span class="nm">Correlation (skill)</span><span class="tok mono" id="multiTok">${state.multiTok||'resolving…'}</span></div>${multiSkillImg()}</div>` +
     `<div class="card"><div class="head"><span class="nm">Current forecast</span><span class="tok mono">mm</span></div>${forecastFrame(MULTI.oc)}</div>`;
   postRender();}
 
@@ -270,16 +284,10 @@ function renderGroups(){
   postRender();}
 
 /* ===================== orchestration ===================== */
-function imgLoads(url){return new Promise(r=>{const i=new Image();i.fetchPriority="high";i.onload=()=>r(true);i.onerror=()=>r(false);i.src=url;});}
-async function resolveMulti(){
-  for(const t of MULTI_CANDS){ if(await imgLoads(VERIF_TPL(state.ts.m,t,state.ts.fcmonth))){ state.multiTok=t; renderMulti(); return; } }
-  state.multiTok=null; renderMulti();
-}
 function rebuild(){state.ts=timeSpec(+$("y").value,+$("m").value,$("t").value);renderReadout();
   state.multiTok=null;
-  resolveMulti();            // kick the C3S multi skill PNG fetch first (high priority)
-  renderMulti();             // skill placeholder + forecast (forecast iframes are low priority)
-  renderSkill();             // provider skill PNGs (high priority)
+  renderMulti();             // C3S multi skill <img> created first → loads first (self-resolves the year)
+  renderSkill();             // provider skill PNGs
   renderGroups();}           // grouped forecast iframes (low priority, lazy)
 function setCls(sel){state.cls[sel.dataset.k]=sel.value;renderSkill();renderGroups();}
 function setRegion(){state.region=$("region").value;
