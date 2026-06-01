@@ -44,6 +44,7 @@
   .vp.sk{aspect-ratio:9/5}
   .vp.fc{aspect-ratio:600/457}
   .vp img{width:100%;display:block;transform-origin:center;transition:transform .2s ease}
+  .vp.sk img{position:absolute;inset:0;width:100%;height:100%;object-fit:fill}
   .vp .scaler{position:absolute;inset:0;transform-origin:center}
   .vp iframe{width:100%;height:100%;border:0;display:block}
   .vp .ph{color:var(--muted);font-size:12px;text-align:center;padding:14px}
@@ -66,6 +67,8 @@
   .calbar{display:flex;flex-wrap:wrap;gap:14px;max-width:920px;margin-top:14px}
   .calbar .chk{flex-basis:100%;margin:0}
   .calbar .calbox{flex:1;min-width:220px}
+  .calbar button{font-family:"JetBrains Mono",monospace;font-size:12px;padding:7px 12px;border:1px solid var(--accent);background:var(--accent);color:#fff;border-radius:8px;cursor:pointer}
+  .calbar button:active{transform:translateY(1px)}
   .calcol{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px;padding:0 0 16px}
   .calbox{border:1px solid var(--line);border-radius:9px;padding:10px 12px;background:var(--panel)}
   .calbox h4{margin:0 0 8px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink)}
@@ -97,19 +100,24 @@
   <section><p class="lbl">C3S multi-system <span style="text-transform:none;letter-spacing:0;color:var(--accent)">· calibrate against these two plots</span></p>
     <div class="grid two" id="multi"></div>
     <div class="calbar">
-      <div class="chk"><input type="checkbox" id="cross"><label for="cross">show centre crosshair — tune until the country sits under it at zoom ~1</label></div>
-      <div class="calbox"><h4>Skill map (left) · region <span id="calRegion" class="mono">—</span></h4>
-        <div class="rng"><label>zoom <span id="szlbl"></span></label><input id="sz" type="range" min="1" max="9" step="0.25"></div>
-        <div class="rng"><label>nudge x</label><input id="sx" type="range" min="-0.3" max="0.3" step="0.005"></div>
-        <div class="rng"><label>nudge y</label><input id="sy" type="range" min="-0.3" max="0.3" step="0.005"></div>
+      <div class="chk"><input type="checkbox" id="cross"><label for="cross">show centre crosshair — tune until the country sits under it</label>
+        <span style="flex:1"></span>
+        <span class="mono" style="font-size:11px;color:var(--muted)">region <b id="calRegion">—</b></span>
+        <button id="saveCal" type="button" style="display:none">save region defaults → file</button>
+        <span id="saveStatus" class="mono" style="font-size:11px"></span>
       </div>
-      <div class="calbox"><h4>Forecast (right)</h4>
-        <div class="rng"><label>zoom <span id="fzlbl"></span></label><input id="fz" type="range" min="1" max="9" step="0.25"></div>
-        <div class="rng"><label>nudge x</label><input id="fx" type="range" min="-0.3" max="0.3" step="0.005"></div>
-        <div class="rng"><label>nudge y</label><input id="fy" type="range" min="-0.3" max="0.3" step="0.005"></div>
+      <div class="calbox"><h4>Skill map (left) · global verification</h4>
+        <div class="rng"><label>zoom <span id="szlbl"></span></label><input id="sz" type="range" min="1" max="30" step="0.5"></div>
+        <div class="rng"><label>pan x</label><input id="sx" type="range" min="-1" max="1" step="0.01"></div>
+        <div class="rng"><label>pan y</label><input id="sy" type="range" min="-1" max="1" step="0.01"></div>
+      </div>
+      <div class="calbox"><h4>Forecast (right) · regional embed <span id="calArea" class="mono" style="color:var(--muted)"></span></h4>
+        <div class="rng"><label>zoom <span id="fzlbl"></span></label><input id="fz" type="range" min="1" max="12" step="0.25"></div>
+        <div class="rng"><label>pan x</label><input id="fx" type="range" min="-1" max="1" step="0.01"></div>
+        <div class="rng"><label>pan y</label><input id="fy" type="range" min="-1" max="1" step="0.01"></div>
       </div>
     </div>
-    <p class="note">Calibration is shared by every country in the current region: tune x/y/zoom here, then it applies to all of them. Switching region loads that region's own defaults.</p>
+    <p class="note">Skill is the <b>global</b> verification map (same for every region); the forecast uses the region's <b>continent embed</b>. Pan/zoom are independent per panel. Calibration is shared by every country in the current region — tune it, then it applies to all of them. Switching region loads that region's own defaults.</p>
   </section>
 
   <section><div class="controls"><div class="field"><label for="c">Country</label><select id="c"></select></div></div></section>
@@ -298,7 +306,23 @@ function syncSliders(){
   $("sz").value=state.sk.z;$("sx").value=state.sk.x;$("sy").value=state.sk.y;
   $("fz").value=state.fc.z;$("fx").value=state.fc.x;$("fy").value=state.fc.y;
   $("szlbl").textContent=state.sk.z+"×";$("fzlbl").textContent=state.fc.z+"×";
-  $("calRegion").textContent=state.region;}
+  $("calRegion").textContent=state.region;$("calArea").textContent=areaFor(state.region).code;
+  $("saveStatus").textContent="";}
+
+/* ===== local calibration save (dev only — never runs on the static site) ===== */
+const isLocal=()=>["localhost","127.0.0.1"].includes(location.hostname);
+async function saveCal(){
+  $("saveStatus").style.color="var(--muted)";$("saveStatus").textContent="saving…";
+  try{
+    const r=await fetch("/api/save-calibration",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({region:state.region,sk:state.sk,fc:state.fc})});
+    const j=await r.json().catch(()=>({}));
+    if(r.ok){ // reflect the saved numbers as the new in-memory defaults too
+      REGION_CAL[state.region]={sk:{...state.sk},fc:{...state.fc}};
+      $("saveStatus").style.color="var(--accent)";$("saveStatus").textContent=`saved ${state.region} → index.html`;
+    }else{ $("saveStatus").style.color="var(--bad)";$("saveStatus").textContent="error: "+(j.error||r.status); }
+  }catch(e){ $("saveStatus").style.color="var(--bad)";$("saveStatus").textContent="save failed (run tools/serve.py): "+e.message; }
+}
 
 function init(){
   $("m").innerHTML=MONTHS.map((mn,i)=>`<option value="${i+1}">${mn}</option>`).join("");
@@ -319,6 +343,7 @@ function init(){
   const bind=(id,grp,key,lbl)=>{const el=$(id);el.addEventListener("input",()=>{state[grp][key]=+el.value;if(lbl)$(lbl).textContent=el.value+"×";reZoom();});};
   bind("sz","sk","z","szlbl");bind("sx","sk","x");bind("sy","sk","y");
   bind("fz","fc","z","fzlbl");bind("fx","fc","x");bind("fy","fc","y");
+  if(isLocal()){ $("saveCal").style.display="";$("saveCal").addEventListener("click",saveCal); }
   syncSliders();
   rebuild();
 }

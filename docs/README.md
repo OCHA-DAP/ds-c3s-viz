@@ -30,9 +30,28 @@ Pulls straight from ECMWF / Copernicus. No data infrastructure, no build, no Pyt
 
 ## Config (top of the `<script>`)
 - `PROVIDERS` — name, OpenCharts centre code, verification token.
-- `COUNTRY` — `{bbox:[lon_min,lat_min,lon_max,lat_max], area:"areaNN"}`. Add countries here.
-- Advanced panel: skill-map zoom + 4 map-area sliders (calibrate where the globe sits in the
-  PNG, used for the CSS crop), and the forecast product type (tercile summary / anomaly / etc.).
+- `COUNTRY` — `{bbox:[lon_min,lat_min,lon_max,lat_max], region:"Africa"}`. Add countries here;
+  `region` chooses which continent embed + calibration to use.
+- `AREAS` — per region: continent embed `code` (area11, etc.), geographic window `ext`
+  `[lonW,lonE,latN,latS]`, and `fit` (where that window sits in the frame). Skill maps always
+  use the **global** verification PNG (`SKILL_EXT`/`SKILL_FIT`), regardless of region.
+- `REGION_CAL` — per-region calibration: `{sk:{x,y,z}, fc:{x,y,z}}` where `x,y` pan and `z`
+  zooms. Shared by every country in the region (a country's position is computed from its bbox;
+  pan/zoom fine-tune on top). **These are the baked-in defaults users see** — set them with the
+  workflow below.
+- Forecast product type (tercile summary / anomaly / etc.) is in the Advanced panel.
+
+## Calibrating regions locally (then pushing the defaults)
+The shipped `ext`/`fit`/`REGION_CAL` numbers are guesses. To set real defaults:
+
+1. `python3 tools/serve.py` → open http://localhost:8000
+2. Select a country in the region, tick **show centre crosshair**, and tune the skill (left)
+   and forecast (right) pan/zoom sliders — they sit right under the two C3S plots — until the
+   country sits under the crosshair.
+3. Click **save region defaults → file** (only shown on localhost). `tools/serve.py` writes the
+   values into the `REGION_CAL` line for that region in `index.html`.
+4. Repeat per region, then `git commit` + `git push`. Pages serves the new defaults; the live
+   site never calls the save API, so it stays a pure static page.
 
 ## Known gaps
 - **Multi-system skill map**: its token isn't in the verification gallery under a guessable
