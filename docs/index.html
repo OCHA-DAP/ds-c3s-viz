@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>C3S seasonal precip — skill vs forecast</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{--ink:#15201c;--paper:#f4f1ea;--panel:#fbfaf6;--line:#d8d2c4;--muted:#6b6555;
+    --accent:#0b6e4f;--accent2:#1769aa;--good:#0b6e4f;--ok:#b8860b;--bad:#b3402e;--none:#8a8478;
+    --shadow:0 1px 0 #fff inset,0 2px 14px rgba(20,30,25,.06);}
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(120% 80% at 100% 0%,#ece7da 0%,var(--paper) 55%) fixed;
+    color:var(--ink);font-family:"Archivo",system-ui,sans-serif;line-height:1.45;-webkit-font-smoothing:antialiased}
+  .mono{font-family:"JetBrains Mono",ui-monospace,monospace}
+  header{padding:26px 22px 14px;border-bottom:1px solid var(--line)}
+  h1{font-weight:900;font-size:clamp(20px,3.2vw,30px);letter-spacing:-.02em;margin:0}
+  h1 .dot{color:var(--accent)}
+  .sub{color:var(--muted);margin:6px 0 0;max-width:74ch;font-size:14px}
+  main{padding:18px 22px 70px;max-width:1320px;margin:0 auto}
+  section{margin-top:26px}
+  .lbl{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:0 0 10px;display:flex;align-items:center;gap:10px}
+  .lbl::after{content:"";flex:1;height:1px;background:var(--line)}
+  .controls{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end}
+  .field{display:flex;flex-direction:column;gap:5px}
+  .field label{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700}
+  select,input[type=number]{font-family:"JetBrains Mono",monospace;font-size:14px;padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:var(--panel);color:var(--ink);box-shadow:var(--shadow);min-width:130px}
+  select:focus,input:focus{outline:2px solid var(--accent);outline-offset:1px}
+  .yr{display:flex;align-items:center}
+  .yr button{font-family:"JetBrains Mono",monospace;border:1px solid var(--line);background:var(--panel);width:30px;height:38px;cursor:pointer;font-size:16px}
+  .yr button:first-child{border-radius:9px 0 0 9px}.yr button:last-child{border-radius:0 9px 9px 0}
+  .yr input{border-radius:0;border-left:0;border-right:0;text-align:center;min-width:84px}
+  .readout{font-size:12.5px;color:var(--muted);padding:8px 0 0}
+  .readout b{color:var(--ink)}
+  .grid{display:grid;gap:16px}
+  .cards{grid-template-columns:repeat(auto-fill,minmax(240px,1fr))}
+  .two{grid-template-columns:repeat(auto-fit,minmax(320px,1fr));max-width:920px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:var(--shadow)}
+  .card .head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 11px;border-bottom:1px solid var(--line)}
+  .card .head .nm{font-weight:700;font-size:13px}.card .head .tok{font-size:10px;color:var(--muted)}
+  .vp{position:relative;overflow:hidden;background:#fff;display:flex;align-items:center;justify-content:center}
+  .vp.sk,.vp.fc{aspect-ratio:1/1}
+  .vp img{width:100%;display:block;transform-origin:0 0;-webkit-user-drag:none;user-select:none}
+  .vp.sk img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;cursor:grab;touch-action:none}
+  .vp .scaler{position:absolute;inset:0;transform-origin:0 0}
+  /* forecasts render at a fixed pixel size, then scale to fit — so the embed's internal
+     layout is identical on every tile and the shared pan/zoom lines them all up */
+  .vp.fc .fxd{position:absolute;top:0;left:0;width:600px;height:600px;transform-origin:0 0}
+  .vp .dragcap{position:absolute;inset:0;z-index:4;cursor:grab;touch-action:none}
+  .vp iframe{width:100%;height:100%;border:0;display:block}
+  .vp .ph{color:var(--muted);font-size:12px;text-align:center;padding:14px}
+  .badge{font-family:"JetBrains Mono",monospace;font-size:10.5px;font-weight:600;padding:3px 8px;border-radius:999px;color:#fff;text-transform:uppercase;letter-spacing:.06em}
+  .b-good{background:var(--good)}.b-ok{background:var(--ok)}.b-bad{background:var(--bad)}.b-none{background:var(--none)}
+  .card .foot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 11px;border-top:1px solid var(--line)}
+  .card .foot select{min-width:0;padding:6px 8px;font-size:12px;flex:1}
+  .groups{display:flex;flex-direction:column;gap:16px}
+  @media(max-width:560px){.group .stack{grid-template-columns:1fr}}
+  .group{border:1px solid var(--line);border-radius:13px;background:rgba(255,255,255,.4);padding:12px}
+  .group h3{margin:0 0 10px;font-size:13px;font-weight:900;letter-spacing:.04em;display:flex;align-items:center;gap:8px}
+  .group h3 .pip{width:11px;height:11px;border-radius:3px}
+  .group.empty{opacity:.55}.group .stack{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}
+  .note{font-size:12px;color:var(--muted);margin-top:8px}
+  details.adv{margin-top:30px;border:1px dashed var(--line);border-radius:11px;padding:0 14px;background:rgba(255,255,255,.3)}
+  details.adv summary{cursor:pointer;font-size:12px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--muted);padding:12px 0}
+  .calbar{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;max-width:920px;margin-top:14px}
+  .calbar button{justify-self:start;font-family:"JetBrains Mono",monospace;font-size:12px;padding:7px 12px;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:8px;cursor:pointer}
+  .calbar button:active{transform:translateY(1px)}
+  .calcol{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px;padding:0 0 16px}
+  .calbox{border:1px solid var(--line);border-radius:9px;padding:10px 12px;background:var(--panel)}
+  .calbox h4{margin:0 0 8px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink)}
+  .rng{display:flex;flex-direction:column;gap:3px;font-size:11.5px;color:var(--muted);margin-bottom:6px}
+  .chk{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink);margin:4px 0 10px}
+  footer{border-top:1px solid var(--line);padding:18px 22px;color:var(--muted);font-size:12px;max-width:1320px;margin:0 auto}
+  footer a{color:var(--accent2)}
+  .docs{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:18px 28px}
+  .docs h4{margin:0 0 6px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink)}
+  .docs p{margin:0;line-height:1.5}
+  .docs ul{margin:0;padding-left:16px}.docs li{margin:3px 0}
+</style>
+</head>
+<body>
+<header>
+  <h1>C3S seasonal precipitation <span class="dot">·</span> skill &amp; forecast</h1>
+  <p class="sub">Pick an issued month + valid trimester + forecast region. Shows the C3S multi-system 3-month precipitation
+    correlation (1993–2016 hindcast skill) and current forecast, then each provider's skill map (classify good/ok/bad)
+    and the forecasts grouped by your classification. Drag/scroll to frame the maps. Pulls directly from ECMWF / Copernicus — no build, no backend.</p>
+</header>
+
+<main>
+  <section>
+    <div class="controls">
+      <div class="field"><label for="m">Issued month</label><select id="m"></select></div>
+      <div class="field"><label for="t">Valid trimester</label><select id="t"></select></div>
+      <div class="field"><label for="y">Cycle year</label>
+        <div class="yr"><button id="ydn">–</button><input id="y" class="mono" type="number"><button id="yup">+</button></div></div>
+      <div class="field"><label for="region">Forecast region</label><select id="region"></select></div>
+    </div>
+    <div class="readout mono" id="readout"></div>
+  </section>
+
+  <section><p class="lbl">C3S multi-system <span style="text-transform:none;letter-spacing:0;color:var(--accent)">· drag to pan · scroll to zoom</span></p>
+    <div class="grid two" id="multi"></div>
+    <div class="calbar">
+      <button id="resetSk" type="button">reset skill view</button>
+      <button id="resetFc" type="button">reset forecast view</button>
+    </div>
+    <p class="note"><b>Drag</b> a map to pan and <b>scroll</b> over it to zoom (or use the sliders). The view syncs across <b>all</b> skill maps and, separately, across <b>all</b> forecast maps — skill and forecast move independently. Pick the forecast region above.</p>
+  </section>
+
+  <section>
+    <p class="lbl">Provider skill — correlation</p>
+    <div class="grid cards" id="skill"></div>
+    <p class="note">Higher correlation = more skill. Set each provider good/ok/bad — the grouping below updates live.
+      Drag/zoom any skill map to reframe them all.</p>
+  </section>
+
+  <section>
+    <p class="lbl">Forecasts grouped by skill</p>
+    <div class="groups" id="groups"></div>
+    <p class="note">One row per skill level, plus the providers you haven't classified yet. These follow the forecast pan/zoom set above.</p>
+  </section>
+
+  <details class="adv">
+    <summary>Advanced — forecast product &amp; sources</summary>
+    <div class="calcol">
+      <div class="calbox"><h4>Forecast product</h4>
+        <select id="ftype" style="width:100%">
+          <option value="tsum">Tercile summary</option>
+          <option value="ensm">Ensemble-mean anomaly</option>
+          <option value="terc_hi">Prob. upper tercile</option>
+          <option value="terc_lo">Prob. lower tercile</option>
+          <option value="prob">Prob. exceeding median</option>
+        </select>
+        <p class="note" style="margin-top:10px">Skill maps are global PNGs from the C3S verification gallery; forecasts are the
+          selected region's continent embed (e.g. Africa = area11). Pan/zoom is a CSS transform applied live to every map of
+          that type — drag or scroll any one and the rest follow.</p>
+      </div>
+    </div>
+  </details>
+</main>
+
+<footer>
+  <p class="lbl" style="margin-bottom:12px">About &amp; sources</p>
+  <div class="docs">
+    <div>
+      <h4>What you're looking at</h4>
+      <p><b>Skill</b> = how well each system reproduced past observations: the correlation between its
+      1993–2016 hindcast and observed precipitation (higher = more trustworthy). <b>Forecast</b> = the
+      current operational outlook for the same 3-month season. Classify each system good/ok/bad from its
+      skill map; the forecasts regroup live so you can weight them accordingly.</p>
+    </div>
+    <div>
+      <h4>Conventions</h4>
+      <p>3-month seasons are picked by issued month + valid trimester; only seasons starting 1–3 months
+      after issue are selectable. The verification <span class="mono">fcmonth</span> is the lead to the
+      <i>last</i> month of the window (leadtime + 2). Skill maps are global; the forecast region selector
+      switches the continent embed. Drag to pan, scroll to zoom — synced across all maps of each type.</p>
+    </div>
+    <div>
+      <h4>Systems (latest C3S)</h4>
+      <p class="mono" style="font-size:11px">ECMWF SEAS5.1 · UKMO GloSea6 · Météo-France S9 · DWD GCFS2.2 ·
+      CMCC SPS4 · NCEP CFSv2 · JMA CPS4 · ECCC GEM5.2-NEMO · BoM ACCESS-S2 · multi-system C3Smm</p>
+    </div>
+    <div>
+      <h4>Links</h4>
+      <ul>
+        <li><a href="https://climate.copernicus.eu/charts/c3s_seasonal/" target="_blank" rel="noopener">C3S seasonal charts (OpenCharts)</a></li>
+        <li><a href="https://sites.ecmwf.int/cxep/c3s-seasonal-verification/" target="_blank" rel="noopener">C3S seasonal verification gallery</a></li>
+        <li><a href="https://confluence.ecmwf.int/display/CKB/C3S+seasonal+forecasts+verification+plots" target="_blank" rel="noopener">C3S verification plots — docs</a></li>
+        <li><a href="https://confluence.ecmwf.int/display/CKB/Summary+of+available+data" target="_blank" rel="noopener">C3S: summary of available data / systems</a></li>
+        <li><a href="https://cds.climate.copernicus.eu/datasets?q=seasonal" target="_blank" rel="noopener">Copernicus CDS — seasonal datasets</a></li>
+        <li><a href="https://github.com/OCHA-DAP/ds-c3s-viz" target="_blank" rel="noopener">Source (OCHA-DAP/ds-c3s-viz)</a></li>
+      </ul>
+    </div>
+  </div>
+  <p style="margin-top:18px">Generated using Copernicus Climate Change Service (C3S) information.
+  Skill: C3S seasonal verification, 1993–2016 hindcast. Neither the European Commission nor ECMWF is
+  responsible for any use of this information.</p>
+</footer>
+
+<script>
+/* ===================== CONFIG ===================== */
+const TYPE_DEFAULT="tsum";
+const VERIF_TPL=(stm,tok,fc)=>`https://sites.ecmwf.int/cxep/c3s-seasonal-verification/plots/stmonth${pad(stm)}/${tok}_stmonth${pad(stm)}_hindcast1993-2016_monthly.3m.fcmonth${fc}.tp.corr.png`;
+const EMBED_TPL=(oc,ts,type,area)=>`https://climate.copernicus.eu/charts/embed/c3s_seasonal/c3s_seasonal_spatial_${oc}_rain_3m?area=${area}&base_time=${ts.base_time}&player_dimension=valid_time&type=${type}&valid_time=${ts.valid_time}`;
+
+const PROVIDERS=[
+  {key:"ecmwf",name:"ECMWF",oc:"ecmf",verif:"ecmwf_s51"},          // SEAS5.1
+  {key:"ukmo",name:"UK Met Office",oc:"egrr",verif:"ukmo_s610"},   // GloSea6
+  {key:"meteofr",name:"Météo-France",oc:"lfpw",verif:"meteo_france_s9"},
+  {key:"dwd",name:"DWD",oc:"edzw",verif:"dwd_s22"},                // GCFS2.2
+  {key:"cmcc",name:"CMCC",oc:"cmcc",verif:"cmcc_s4"},              // SPS4
+  {key:"ncep",name:"NCEP",oc:"kwbc",verif:"ncep_s2"},              // CFSv2
+  {key:"jma",name:"JMA",oc:"rjtd",verif:"jma_s4"},                 // CPS4
+  {key:"eccc",name:"ECCC",oc:"cwao",verif:"eccc_s5"},             // GEM5.2-NEMO
+  {key:"bom",name:"BOM",oc:"ammc",verif:"bom_s2"},                 // ACCESS-S2
+];
+const MULTI={key:"multi",name:"C3S multi-system",oc:"mm"};
+const MULTI_CANDS=["C3Smm_s2026","C3Smm_s2025","C3Smm_s2024","C3Smm_s2023"];  // year-versioned
+
+// Forecast embed area per region. Skill maps are always the global verification PNG.
+const AREAS={"Global":"area08","Africa":"area11","North America":"area06","Pacific Islands":"area31",
+  "Europe":"area01","Asia":"area09","South America":"area13","Tropics":"area14"};
+const areaFor=r=>AREAS[r]||"area08";
+const TRIM={JFM:1,FMA:2,MAM:3,AMJ:4,MJJ:5,JJA:6,JAS:7,ASO:8,SON:9,OND:10,NDJ:11,DJF:12};
+const MONTHS=["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+/* ===================== state ===================== */
+const pad=n=>String(n).padStart(2,"0");
+const $=id=>document.getElementById(id);
+// Pan/zoom is shared per map type. tx,ty are pan as a fraction of the frame; z is zoom.
+// Edit these starting-view defaults and commit to bake them in for everyone.
+const DEFAULTS={sk:{tx:0,ty:0,z:1}, fc:{tx:0,ty:0,z:1}};
+const state={ts:null,region:"Africa",cls:{},type:TYPE_DEFAULT,multiTok:null,
+  sk:{...DEFAULTS.sk}, fc:{...DEFAULTS.fc}};
+
+function timeSpec(y,m,trim){const ts=TRIM[trim];let ty=y;if(ts<m)ty++;
+  const lead=(ty*12+(ts-1))-(y*12+(m-1))+1;          // lead to the FIRST month of the trimester
+  // C3S verification fcmonth is the lead to the LAST month of the 3-month window (first+2)
+  return {y,m,trim,tStart:ts,tYear:ty,leadtime:lead,fcmonth:lead+2,base_time:`${y}${pad(m)}010000`,valid_time:`${ty}${pad(ts)}010000`};}
+// shared pan (tx,ty as a fraction of the frame) + zoom -> a CSS transform (origin centre, set in CSS)
+const tfmStr=cal=>`translate(${(cal.tx*100).toFixed(2)}%,${(cal.ty*100).toFixed(2)}%) scale(${cal.z.toFixed(3)})`;
+
+function badge(cls){return `<span class="badge b-${cls}">${cls==='none'?'unset':cls}</span>`;}
+const GROUPS=[["good","var(--good)"],["ok","var(--ok)"],["bad","var(--bad)"],["none","var(--none)"]];
+const GROUP_LBL={good:"GOOD",ok:"OK",bad:"BAD",none:"UNCLASSIFIED"};
+
+/* ===================== render ===================== */
+function renderReadout(){const ts=state.ts;
+  $("readout").innerHTML=`base_time <b>${ts.base_time}</b> · valid_time <b>${ts.valid_time}</b> · trimester <b>${ts.trim}</b> · leadtime <b>${ts.leadtime}</b> · skill fcmonth <b>${ts.fcmonth}</b>`;}
+
+function skillImg(tok){
+  if(!tok) return `<div class="vp sk"><div class="ph">no skill map for this system / selection</div></div>`;
+  const url=VERIF_TPL(state.ts.m,tok,state.ts.fcmonth);
+  return `<div class="vp sk"><img src="${url}" draggable="false" fetchpriority="high" style="transform:${tfmStr(state.sk)}" referrerpolicy="no-referrer"
+    onerror="this.parentNode.innerHTML='<div class=ph>no map for this month/lead</div>'"></div>`;}
+
+// Multi-system token is year-versioned: render the image immediately at the first candidate
+// (so it loads as early as the provider maps) and cascade to older years on error.
+function multiSkillImg(){
+  const url0=VERIF_TPL(state.ts.m,MULTI_CANDS[0],state.ts.fcmonth);
+  return `<div class="vp sk"><img src="${url0}" data-i="0" draggable="false" fetchpriority="high"
+    style="transform:${tfmStr(state.sk)}" referrerpolicy="no-referrer"
+    onload="window.__multiOk(this)" onerror="window.__multiErr(this)"></div>`;}
+window.__multiOk=img=>{state.multiTok=MULTI_CANDS[+img.dataset.i];
+  const l=document.getElementById("multiTok"); if(l) l.textContent=state.multiTok;};
+window.__multiErr=img=>{const i=+img.dataset.i+1;
+  if(i<MULTI_CANDS.length){img.dataset.i=i;img.src=VERIF_TPL(state.ts.m,MULTI_CANDS[i],state.ts.fcmonth);}
+  else{state.multiTok=null;const l=document.getElementById("multiTok");if(l)l.textContent="n/a";
+    img.parentNode.innerHTML='<div class=ph>no multi-system skill for this month/lead</div>';}};
+
+// fixed-size .fxd wrapper (scaled to fit) keeps the embed layout identical across tiles;
+// the transparent overlay lets every forecast tile be dragged/zoomed (iframes eat events)
+function forecastFrame(oc){
+  const src=EMBED_TPL(oc,state.ts,state.type,areaFor(state.region));
+  return `<div class="vp fc"><div class="scaler" style="transform:${tfmStr(state.fc)}"><div class="fxd"><iframe loading="lazy" fetchpriority="low" src="${src}" referrerpolicy="no-referrer" allowfullscreen></iframe></div></div><div class="dragcap"></div></div>`;}
+
+function renderMulti(){
+  $("multi").innerHTML =
+    `<div class="card"><div class="head"><span class="nm">Correlation (skill)</span><span class="tok mono" id="multiTok">${state.multiTok||'resolving…'}</span></div>${multiSkillImg()}</div>` +
+    `<div class="card"><div class="head"><span class="nm">Current forecast</span><span class="tok mono">mm</span></div>${forecastFrame(MULTI.oc)}</div>`;
+  postRender();}
+
+function renderSkill(){
+  $("skill").innerHTML=PROVIDERS.map(p=>{
+    const cls=state.cls[p.key]||"none";
+    const sel=`<select data-k="${p.key}" onchange="setCls(this)">
+      <option value="none"${cls==='none'?' selected':''}>unset…</option>
+      <option value="good"${cls==='good'?' selected':''}>good</option>
+      <option value="ok"${cls==='ok'?' selected':''}>ok</option>
+      <option value="bad"${cls==='bad'?' selected':''}>bad</option></select>`;
+    return `<div class="card"><div class="head"><span class="nm">${p.name}</span><span class="tok mono">${p.verif}</span></div>
+      ${skillImg(p.verif)}<div class="foot">${sel}${badge(cls)}</div></div>`;}).join("");
+  postRender();}
+
+function renderGroups(){
+  $("groups").innerHTML=GROUPS.map(([g,col])=>{
+    const keys=PROVIDERS.filter(p=>(state.cls[p.key]||"none")===g).map(p=>p.key);
+    const inner=keys.length?keys.map(k=>{const p=PROVIDERS.find(x=>x.key===k);
+      return `<div class="card"><div class="head"><span class="nm">${p.name}</span></div>${forecastFrame(p.oc)}</div>`;}).join("")
+      :`<div class="note">— none —</div>`;
+    return `<div class="group ${keys.length?'':'empty'}"><h3><span class="pip" style="background:${col}"></span>${GROUP_LBL[g]} (${keys.length})</h3><div class="stack">${inner}</div></div>`;}).join("");
+  postRender();}
+
+/* ===================== orchestration ===================== */
+function rebuild(){state.ts=timeSpec(+$("y").value,+$("m").value,$("t").value);renderReadout();
+  state.multiTok=null;
+  renderMulti();             // C3S multi skill <img> created first → loads first (self-resolves the year)
+  renderSkill();             // provider skill PNGs
+  renderGroups();}           // grouped forecast iframes (low priority, lazy)
+function setCls(sel){state.cls[sel.dataset.k]=sel.value;renderSkill();renderGroups();}
+function setRegion(){state.region=$("region").value;
+  renderMulti();renderGroups();}
+
+const FXD=600;  // fixed render size of each forecast embed, before fit-scaling
+const ZMAX={sk:80,fc:15};
+// live-apply the shared transform to every map of a type, without re-rendering
+function applyTransforms(which){
+  if(which!=="fc") document.querySelectorAll(".vp.sk img").forEach(el=>el.style.transform=tfmStr(state.sk));
+  if(which!=="sk") document.querySelectorAll(".vp.fc .scaler").forEach(el=>el.style.transform=tfmStr(state.fc));}
+// scale each fixed forecast wrapper to fill its (square) tile
+function applyFit(){document.querySelectorAll(".vp.fc .fxd").forEach(el=>{
+  const w=el.closest(".vp").clientWidth; if(w) el.style.transform=`scale(${w/FXD})`;});}
+// zoom keeping the frame fraction (cu,cv) fixed (the cursor position for wheel zoom)
+function zoomAt(cal,z2,cu,cv){const s=state[cal]; z2=Math.max(1,Math.min(ZMAX[cal],z2)); const ratio=z2/s.z;
+  s.tx=cu-ratio*(cu-s.tx); s.ty=cv-ratio*(cv-s.ty); s.z=z2; applyTransforms(cal);}
+
+// drag to pan + wheel to zoom-toward-cursor; both shared across all maps of `cal` ("sk"/"fc")
+function attachDrag(el,cal){
+  if(el.dataset.bound) return; el.dataset.bound="1";
+  let drag=false,lx,ly;
+  el.addEventListener("dragstart",e=>e.preventDefault());
+  el.addEventListener("pointerdown",e=>{e.preventDefault();drag=true;lx=e.clientX;ly=e.clientY;el.setPointerCapture(e.pointerId);el.style.cursor="grabbing";});
+  el.addEventListener("pointermove",e=>{if(!drag)return; const r=el.closest(".vp").getBoundingClientRect();
+    state[cal].tx+=(e.clientX-lx)/r.width; state[cal].ty+=(e.clientY-ly)/r.height; lx=e.clientX;ly=e.clientY; applyTransforms(cal);});
+  const end=()=>{drag=false;el.style.cursor="grab";};
+  el.addEventListener("pointerup",end); el.addEventListener("pointercancel",end);
+  el.addEventListener("wheel",e=>{e.preventDefault(); const r=el.closest(".vp").getBoundingClientRect();
+    zoomAt(cal, state[cal].z*Math.exp(-e.deltaY*0.0015), (e.clientX-r.left)/r.width, (e.clientY-r.top)/r.height);},{passive:false});}
+function postRender(){
+  document.querySelectorAll(".vp.sk img").forEach(el=>attachDrag(el,"sk"));
+  document.querySelectorAll(".vp .dragcap").forEach(el=>attachDrag(el,"fc"));
+  applyFit();}
+
+// Valid 3-month seasons for an issued month are those starting 1–3 months after issue
+// (e.g. May → JJA, JAS, ASO). Grey out the rest; keep a valid season selected.
+function updateTrimOptions(){
+  const m=+$("m").value; let firstOk=null;
+  [...$("t").options].forEach(o=>{const off=((TRIM[o.value]-m)%12+12)%12;
+    o.disabled=!(off>=1&&off<=3); if(!o.disabled&&firstOk===null) firstOk=o.value;});
+  if($("t").selectedOptions[0].disabled) $("t").value=firstOk;
+}
+
+function init(){
+  $("m").innerHTML=MONTHS.map((mn,i)=>`<option value="${i+1}">${mn}</option>`).join("");
+  $("t").innerHTML=Object.keys(TRIM).map(k=>`<option value="${k}">${k}</option>`).join("");
+  $("region").innerHTML=Object.keys(AREAS).map(k=>`<option>${k}</option>`).join("");
+  const now=new Date(),cy=now.getFullYear(),cm=now.getMonth()+1;
+  $("m").value="5";$("t").value="JAS";$("y").value=(5<=cm?cy:cy-1);
+  $("region").value=state.region;
+  updateTrimOptions();
+  $("m").addEventListener("change",()=>{updateTrimOptions();rebuild();});
+  $("t").addEventListener("change",rebuild);
+  $("y").addEventListener("change",rebuild);
+  $("yup").onclick=()=>{$("y").value=+$("y").value+1;rebuild();};
+  $("ydn").onclick=()=>{$("y").value=+$("y").value-1;rebuild();};
+  $("region").addEventListener("change",setRegion);
+  $("ftype").addEventListener("change",()=>{state.type=$("ftype").value;renderMulti();renderGroups();});
+  $("resetSk").addEventListener("click",()=>{state.sk={...DEFAULTS.sk};applyTransforms("sk");});
+  $("resetFc").addEventListener("click",()=>{state.fc={...DEFAULTS.fc};applyTransforms("fc");});
+  window.addEventListener("resize",applyFit);
+  rebuild();
+}
+init();
+</script>
+</body>
+</html>
