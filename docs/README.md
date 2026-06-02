@@ -1,9 +1,10 @@
 # C3S seasonal precipitation — skill & forecast viewer
 
-Single static HTML file. Pick an **issued month** + **valid trimester**, see the C3S
-multi-system 3-month precipitation **correlation** (skill, 1993–2016 hindcast) and
-**current forecast**; pick a **country** to get each provider's skill map (classify
-good/ok/bad) and the forecasts grouped by your classification.
+Single static HTML file. Pick an **issued month**, a **valid trimester** (only seasons that
+start 1–3 months after the issued month are selectable), and a **forecast region**. See the
+C3S multi-system 3-month precipitation **correlation** (skill, 1993–2016 hindcast) and
+**current forecast**, then each provider's skill map — classify good/ok/bad and the forecasts
+regroup by your classification. Drag/scroll to frame the maps.
 
 Pulls straight from ECMWF / Copernicus. No data infrastructure, no build, no Python,
 **no `fetch()` and therefore no CORS dependency** — it's only `<img>` + `<iframe>`.
@@ -21,10 +22,11 @@ Pulls straight from ECMWF / Copernicus. No data infrastructure, no build, no Pyt
   ncep_s2, jma_s4, eccc_s5, bom_s2. The verification `fcmonth` is the lead to the **last**
   month of the 3-month window (= leadtime + 2).
 - **Forecasts**: the C3S charts are interactive "player" plots with no static image URL,
-  so each is an **embedded** OpenCharts product page (`charts.ecmwf.int/products/
-  c3s_seasonal_spatial_<centre>_rain_3m?...&area=<region>`). Framing is allowed (no
-  X-Frame-Options / CSP). Region is set by area code: Africa=area11, North America=area06,
-  Pacific Islands=area31, Global=area08, etc.
+  so each is an **embedded** OpenCharts player (`climate.copernicus.eu/charts/embed/
+  c3s_seasonal/c3s_seasonal_spatial_<centre>_rain_3m?...&area=<region>`). Framing is allowed
+  (no X-Frame-Options / CSP). Region area codes: Africa=area11, North America=area06,
+  Pacific Islands=area31, Global=area08, etc. Each forecast renders in a fixed-size wrapper
+  scaled to fit, so all tiles share the same internal layout (and the same pan/zoom).
 - **Classification is manual.** The verification server blocks cross-origin canvas pixel
   reads, so a browser can't auto-read the skill colour — set each provider good/ok/bad with
   the dropdown; the grouped forecasts update live.
@@ -47,11 +49,13 @@ Pulls straight from ECMWF / Copernicus. No data infrastructure, no build, no Pyt
   bake in a default view for everyone.
 - Forecast product type (tercile summary / anomaly / etc.) is in the Advanced panel.
 
-## Known gaps
-- **Multi-system skill map**: its token isn't in the verification gallery under a guessable
-  name, so that one panel shows "n/a" (the multi-system *forecast* works). If you find its
-  image URL on the verification page, drop the token into `MULTI.verif`.
-- **No automated good/ok/bad** (canvas blocked). If you want it automated, compute real skill
-  offline with the companion `seasonal_forecast_skill_workflow.py` (CDS hindcast + ERA5
-  Spearman), commit a small `skill.json`, and have the app pre-fill the dropdowns from it —
-  same static, no live infra.
+## Notes / gaps
+- **Multi-system skill** uses the year-versioned token `C3Smm_s{year}` (`MULTI_CANDS`): the map
+  starts at the newest year and cascades to older ones on error, showing "n/a" only if none
+  resolve. Bump `MULTI_CANDS` as new cycles appear.
+- **Classification is manual** — the verification server blocks cross-origin canvas pixel reads,
+  so the browser can't auto-read the skill colour. Automating it would mean computing skill
+  offline and shipping a small precomputed JSON for the app to pre-fill the dropdowns (still
+  fully static, no live infra).
+- **Skill loads first**: skill PNGs are `fetchpriority=high` and the multi skill map renders
+  before everything; forecast iframes are `fetchpriority=low` + lazy.
